@@ -49,7 +49,7 @@ def _paired_frame() -> pd.DataFrame:
 
 #: manuscript row label -> the policy name in the archive
 ROWS = (
-    ("Baseline", "BiT-norecon"),
+    ("Original", "BiT-norecon"),
     ("FRED-ABL", "FRED-ABL"),
     ("Eff-R-Net", "Eff-R-Net"),
     ("ONION", "ONION"),
@@ -194,7 +194,7 @@ def table_ablation(frame: pd.DataFrame | None = None) -> str:
     columns = ("auc_gcc", "auc_csa", "auc_hc", "r_res")
     family = load_family()
     family = family[family["attack"].isin(("degree", "random"))]
-    arms = (("Un-reconstructed", "BiT-norecon"),
+    arms = (("Original", "BiT-norecon"),
             ("Rewired", "BiT-degOnly"),
             ("BiT-HyRL", "BiT-HyRL"))
     per_graph = family.groupby(["label", "dataset"])[list(columns)].mean()
@@ -383,7 +383,7 @@ def table_advanced_attacks() -> str:
     attacks = (("adaptive", "Adaptive"), ("correlated", "Correlated"),
                ("multistage", "Multi-stage"), ("gdm", "GDM"))
     metrics = (("auc_gcc", "GCC"), ("auc_csa", "CSA"), ("auc_hc", "$H_C$"))
-    arms = ("Baseline", "FRED-ABL", "Eff-R-Net", "ONION", "QDLM", "ROMEN",
+    arms = ("Original", "FRED-ABL", "Eff-R-Net", "ONION", "QDLM", "ROMEN",
             "UNITY", "BiT-HyRL")
 
     means = frame.groupby(["arm", "attack"])[["auc_gcc", "auc_csa", "auc_hc"]].mean()
@@ -487,7 +487,7 @@ def table_runtime() -> str:
         return "% runtime_benchmark_srv.csv missing"
     frame = pd.read_csv(path)
     scales = ("BA-100", "BA-200", "BA-300", "BA-500", "BA-1000")
-    order = ("Baseline", "UNITY", "FRED-ABL", "BiT-HyRL",
+    order = ("Original", "UNITY", "FRED-ABL", "BiT-HyRL",
              "ONION", "Eff-R-Net", "QDLM", "ROMEN")
     lookup = {(r.method, r.scale): r.total_s for r in frame.itertuples()}
     n_of = {r.scale: r.n for r in frame.itertuples()}

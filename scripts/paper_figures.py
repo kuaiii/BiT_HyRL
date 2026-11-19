@@ -27,7 +27,7 @@ CURVE_COLUMNS = ["dataset", "policy", "attack", "seed",
 
 #: manuscript row label -> archive policy name (same mapping as the tables)
 POLICIES = (
-    ("Baseline", "BiT-norecon"),
+    ("Original", "BiT-norecon"),
     ("FRED-ABL", "FRED-ABL"),
     ("Eff-R-Net", "Eff-R-Net"),
     ("ONION", "ONION"),
@@ -36,7 +36,7 @@ POLICIES = (
     ("BiT-HyRL", "BiT-HyRL"),
 )
 COLOURS = {
-    "Baseline": "#527A9B",
+    "Original": "#527A9B",
     "FRED-ABL": "#EE929D",
     "Eff-R-Net": "#E6B65C",
     "ONION": "#82AA98",
