@@ -211,7 +211,7 @@ set, so shards can run in any order and on any number of workers.
 |---|---|---|
 | per-cell JSON records (`results/records/`, 13 710 files) | superseded by the tidy CSVs | from the authors |
 | per-cell shards behind Tables 6 and 11 (`family/ctrl*`, `attack_cov*`) | the merged tables reproduce every reported number | from the authors |
-| training corpus (`dataset/all`, about 12k graphs) | generated on demand | `scripts/generate_training_data.py` |
+| training corpus (`dataset/all`, 23 757 graphs) | generated on demand, and too large for a git repository | <https://huggingface.co/datasets/huzhzh/Network_datasets>, or `scripts/generate_training_data.py` |
 | upstream repositories of the compared constructions | the comparison runs through the ports in `bit_hyrl/baselines/`, so every method sees the same cascade, metrics and seeds | <https://github.com/kuaiii/dismantling_topology>, <https://github.com/kuaiii/redesign_topology> |
 
 The ports in `bit_hyrl/baselines/` exist so that Table 6 and Fig. 5 compare like with like.
@@ -219,6 +219,7 @@ The ports in `bit_hyrl/baselines/` exist so that Table 6 and Fig. 5 compare like
 ## Availability
 
 This repository: <https://github.com/kuaiii/BiT_HyRL>.
+Corpus and the GDM weights: <https://huggingface.co/datasets/huzhzh/Network_datasets>.
 Compared constructions: <https://github.com/kuaiii/dismantling_topology> and
 <https://github.com/kuaiii/redesign_topology>.
 
