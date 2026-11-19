@@ -129,3 +129,15 @@ BiT-HyRL_RESS_code_and_data/
 
 - 本包：<https://github.com/kuaiii/BiT_HyRL>
 - 对比方法：<https://github.com/kuaiii/dismantling_topology>、<https://github.com/kuaiii/redesign_topology>
+
+---
+
+## 八、许可
+
+版权所有 (C) 2026 Yizhong Hu、Jianfeng Guan、Su Yao、Junxiang Jia、Mu Wang、Changqiao Xu。
+
+本包为自由软件：你可以依据自由软件基金会发布的 GNU 通用公共许可证（GPL）第 3 版或（由你选择）
+任何更新版本的条款，再分发和/或修改本包。分发本包是希望它有用，但**不提供任何担保**，甚至不提供
+可商用性或特定用途适用性的默示担保。完整条款见 [`LICENSE`](LICENSE)。
+
+`network_dismantling/` 是第三方库（见第五节），其自身即按 GPL-3.0 发布，故在本包中按同一许可证再分发。

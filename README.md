@@ -249,3 +249,18 @@ are released as separate repositories: <https://github.com/kuaiii/dismantling_to
 <https://github.com/kuaiii/redesign_topology>.
 
 Correspondence about this package: the corresponding author of JRESS-D-26-02993.
+
+---
+
+## 11. License
+
+Copyright (C) 2026 Yizhong Hu, Jianfeng Guan, Su Yao, Junxiang Jia, Mu Wang, Changqiao Xu.
+
+This package is free software: you can redistribute it and/or modify it under the terms of
+the GNU General Public License as published by the Free Software Foundation, either version 3
+of the License, or (at your option) any later version. It is distributed in the hope that it
+will be useful, but **without any warranty**; without even the implied warranty of
+merchantability or fitness for a particular purpose. The full text is in [`LICENSE`](LICENSE).
+
+`network_dismantling/` is a vendored third-party library (see §9) that is itself released
+under GPL-3.0, so it is redistributed here under the same terms as the rest of the package.
