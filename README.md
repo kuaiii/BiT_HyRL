@@ -72,7 +72,9 @@ BiT-HyRL_RESS_code_and_data/
 │                             #   family/, baselines/, advanced/, budget/, capacity/, scale/,
 │                             #   attack_cov/, checkpoints/
 ├── figures/                  # the seven figures of the manuscript (PDF, plus PNG previews)
-└── paper_tables/             # LaTeX fragments of the fourteen numerical tables
+├── paper_tables/             # LaTeX fragments of the fourteen numerical tables
+├── requirements.txt          # python dependencies
+└── LICENSE, NOTICE           # GPL-3.0 text; copyright statement and third-party attribution
 ```
 
 **Naming.** `bit_hyrl` is the import root of the method package; `results/` is the single

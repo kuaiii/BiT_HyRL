@@ -58,7 +58,9 @@ BiT-HyRL_RESS_code_and_data/
 ├── scripts/              出表、出图、实验驱动、完整性自检
 ├── results/              结果档（唯一数据根），逐文件说明见 results/README.md
 ├── figures/              论文 7 张插图（PDF，另附 PNG 预览）
-└── paper_tables/         14 张数值表的 LaTeX 片段
+├── paper_tables/         14 张数值表的 LaTeX 片段
+├── requirements.txt      Python 依赖
+└── LICENSE、NOTICE       GPL-3.0 全文；版权声明与第三方素材归属
 ```
 
 **关于目录名**：`bit_hyrl` 是方法包的导入根目录（`import bit_hyrl`），`results/` 是唯一数据根，
