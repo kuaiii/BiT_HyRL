@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import math
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -15,6 +16,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.ticker import NullLocator
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from bit_hyrl.topology.interval import deployed_c  # noqa: E402
 
 plt.rcParams.update({
     "font.family": "serif",
@@ -40,7 +46,7 @@ plt.rcParams.update({
     "figure.dpi": 300,
 })
 
-COLOURS = {100: "#FFE694", 300: "#EF939E", 1000: "#A8E9E3"}
+COLOURS = {100: "#FFE694", 300: "#F3B2BA", 1000: "#5BCFDB"}
 KBAR_INK = "#5A5A5A"
 REF_INK = "#BEBEBE"
 
@@ -60,6 +66,23 @@ FIGSIZE = (WIDTH_PT / 72.0, 1.98)
 EMPTY_DASH = (0, (4.0, 1.6))
 
 
+def design_degree(n: int, m: int, e0: float) -> int | None:
+    """Hub degree selected by the deployment rule.
+
+    The rule rounds the geometric midpoint in hub-factor space, ``c = sqrt(c_min * c_up)``,
+    rather than in degree space, which differs from the integer midpoint on three of the
+    drawn cells. Returns ``None`` where the rule is undefined so that the caller can keep
+    the integer midpoint and leave degenerate cells unchanged.
+    """
+    try:
+        c = deployed_c(n, m, e0)
+    except (ValueError, ZeroDivisionError):
+        return None
+    if not math.isfinite(c):
+        return None
+    return int(math.floor(c * (2.0 * m / n) + 0.5))
+
+
 def load(path: Path, fallback: Path | None = None) -> dict:
     cells = defaultdict(list)
     with open(path, encoding="utf-8") as handle:
@@ -72,7 +95,14 @@ def load(path: Path, fallback: Path | None = None) -> dict:
         lo, hi = int(first["lo"]), int(first["hi"])
         e0, f0 = float(first["e0"]), float(first["f0"])
         state = first["status"]
-        kmid = round(math.sqrt(lo * hi)) if hi >= lo else None
+        kmid = None
+        if hi >= lo and first.get("M"):
+            try:
+                kmid = design_degree(int(float(first["n"])), int(float(first["M"])), e0)
+            except (TypeError, ValueError):
+                kmid = None
+        if kmid is None and hi >= lo:
+            kmid = round(math.sqrt(lo * hi))
         at_mid = [r for r in rows
                   if kmid is not None and r["k"] and int(r["k"]) == kmid
                   and r["phi"] not in ("nan", "")]

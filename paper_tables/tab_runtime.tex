@@ -2,21 +2,21 @@
 \centering
 \small
 \setlength{\tabcolsep}{4pt}
-\caption{Deployment-stage cost in seconds: reconstruction of the substrate plus selection of the controller set, measured on one CPU core with the same checkpoint for every row. Cascade evaluation and PPO training are excluded, because both are offline or amortised. Columns are the BA scale; the header gives $N$. A dash marks a cell that this benchmark did not measure: ONION, Eff-R-Net and QDLM exceed fifteen minutes at $N=1000$, and ROMEN was timed only up to $N=200$ here. Its cost at the larger scales is reported in Section~\ref{ss:runtime}, where a single measurement at $N=500$ takes $0.59$~ks and $6.7$~GB of resident memory. Values are medians over three runs where the method completes quickly, and a single run otherwise.}
+\caption{Deployment-stage cost in seconds: reconstruction of the substrate plus selection of the controller set, measured on one CPU core on a single machine in one campaign, with the same checkpoint and placement strategy for every row. Cascade evaluation and PPO training are excluded, because both are offline or amortised. Columns are the BA scale; the header gives $N$. Each entry is a single run. A slower campaign on a different machine is archived as \texttt{runtime\_benchmark.csv} and is not the table reported in the manuscript.}
 \label{tab:runtime}
 \begin{tabular}{@{}l *{5}{r}@{}}
 \toprule
 \textbf{Method} & \textbf{100} & \textbf{200} & \textbf{300} & \textbf{500} & \textbf{1000} \\
 \midrule
-Baseline & 0.02 & 0.04 & 0.06 & 0.10 & 0.21 \\
-UNITY & 0.06 & 0.17 & 0.35 & 0.95 & 3.58 \\
-FRED-ABL & 0.58 & 0.85 & 1.20 & 2.37 & 7.31 \\
+Baseline & 0.03 & 0.03 & 0.05 & 0.08 & 0.17 \\
+UNITY & 0.07 & 0.11 & 0.22 & 0.56 & 2.13 \\
+FRED-ABL & 0.65 & 0.53 & 0.75 & 1.46 & 4.63 \\
 \midrule
-BiT-HyRL & 0.04 & 0.08 & 0.12 & 0.23 & 0.45 \\
-ONION & 6.73 & 28.76 & 70.45 & 205.72 & 512.0 \\
-Eff-R-Net & 9.85 & 20.72 & 32.46 & 65.54 & 101.3 \\
-QDLM & 3.74 & 12.54 & 28.43 & 79.80 & 193.7 \\
-ROMEN & 42.90 & 138.94 & -- & -- & -- \\
+BiT-HyRL & 0.04 & 0.06 & 0.09 & 0.15 & 0.31 \\
+ONION & 5.86 & 19.47 & 45.41 & 126.21 & 523.51 \\
+Eff-R-Net & 6.68 & 14.01 & 21.72 & 45.20 & 94.93 \\
+QDLM & 2.48 & 8.18 & 18.43 & 50.55 & 190.39 \\
+ROMEN & 19.42 & 24.63 & 41.11 & 82.69 & 307.56 \\
 \bottomrule
 \end{tabular}
 \end{table}

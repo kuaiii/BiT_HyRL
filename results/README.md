@@ -20,10 +20,12 @@ Every builder in `scripts/` reads from this directory.
 
 | File | Rows | Content |
 |---|---|---|
-| `family_ctrl.csv` | 16 | Table 6 body. Mean `R_res` of every strategy overall and per family (BA, ER, WS, ISP, AS) plus the three component areas, on all thirty topologies. `BiT-HyRL` = 0.4040. |
-| `family_paired.csv` | 15 | Table 7. Per-topology paired differences against BiT-HyRL, their 95 % Student-`t` intervals, and Holm-corrected two-sided Wilcoxon `p` values, for each of the four metrics. |
-| `_family_ctrl_meanstd.csv` | 16 | Same rows with seed-to-seed standard deviations — the `mean ± std` printing of Table 6. |
-| `family_bench.csv` | 1950 | Construction-only benchmark (no controller, no cascade): four curve areas, `κ`, construction wall clock, per `(graph, construction, build seed)`. Source of Table 8 and of Fig. 5–6. |
+| `family_ctrl.csv` | 16 | Table 7 body. Mean `R_res` of every strategy overall and per family (BA, ER, WS, ISP, AS) plus the three component areas, on all thirty topologies. `BiT-HyRL` = 0.4040. |
+| `family_paired.csv` | 15 | Table 8. Per-topology paired differences against BiT-HyRL, their 95 % Student-`t` intervals, and Holm-corrected two-sided Wilcoxon `p` values, for each of the four metrics. |
+| `_family_ctrl_meanstd.csv` | 16 | Same rows with seed-to-seed standard deviations — the `mean ± std` printing of Table 7. |
+| `ctrl/` | 90 files | The per-cell shards behind the three bimodal rows: one CSV per (variant, topology), thirty topologies each for BiT-HyRL, BiT-R and BiT-E, with the stored removal curves. `family_ctrl_report.py` merges them into `family_ctrl.csv`. |
+| `ctrl_romen/` | 15 files | The ROMEN completion shards, one CSV per topology, covering the nine graphs the archived row was missing. `family_ctrl_report.py` merges them graph by graph. |
+| `family_bench.csv` | 1950 | Construction-only benchmark (no controller, no cascade): four curve areas, `κ`, construction wall clock, per `(graph, construction, build seed)`. Source of Table 6 and of Fig. 5–6. |
 | `agg_method.csv` | 13 | Per-method means of `family_bench.csv` (`A`, the four areas, `κ`, `⟨k⟩`, construction time). |
 | `agg_family.csv` | 13 | The same means split by family. |
 | `fig_points.csv` | 390 | One row per `(graph, construction)`: `A` against `κ` and `⟨k⟩` — panel (a)(b) of Fig. 6. |
@@ -46,8 +48,8 @@ Every builder in `scripts/` reads from this directory.
 | `method_matrix/placement_new/matrix_scalar.csv` | 2 400 | The same for the re-run placement proxies (MWCL, MADQN, k-median, random). |
 | `ablation/ablation_all_scalar.csv` | 3 600 | Table 9 source. Three substrate arms (original, degree-preserving re-randomisation, reconstructed) × 30 graphs × 2 attacks × 20 seeds, with the deployed policy. |
 | `romen/romen_9x6.csv` | 1 080 | ROMEN re-run on the nine attack-coverage graphs, all six orders (ROMEN is a stochastic GA, so the coverage table uses this run rather than the archive). |
-| `runtime_benchmark.csv` | 37 | Table 10 source. Deployment-stage wall clock: reconstruction + placement on one core, per BA scale. |
-| `runtime_benchmark_srv.csv` | 40 | The same measured on the batch server (used for the cross-machine note). |
+| `runtime_benchmark.csv` | 37 | An earlier desktop campaign of the same benchmark, kept for reference; not the table in the manuscript. |
+| `runtime_benchmark_srv.csv` | 40 | Table 10 source. Deployment-stage wall clock measured on the batch server in a single campaign: reconstruction + placement on one core, per BA scale. |
 | `runtime_romen.csv`, `runtime_romen_small.csv` | 1, 4 | ROMEN construction time at the scales where its sweep is memory-bound. |
 
 ## `results/attack_cov/`
@@ -87,9 +89,9 @@ Every builder in `scripts/` reads from this directory.
 
 ## Not included
 
-* `family/ctrl/`, `family/ctrl_romen/`, `attack_cov/` (per-cell curve shards, about 130 MB):
-  the merged tables above reproduce every printed number; the shards are only needed to
-  rebuild those merges. Available from the authors.
+* `attack_cov*/` (per-cell curve shards of the coverage grid): `attack_cov/attack_coverage.csv`
+  carries every printed number; the shards are only needed to rebuild that merge.
+  Available from the authors.
 * `records/` (per-cell JSON, about 312 MB): superseded by the CSVs above.
 
 ## Regenerating the merged tables from scratch

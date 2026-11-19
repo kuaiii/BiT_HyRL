@@ -122,11 +122,11 @@ ckpt["cfg"], ckpt["patience"], ckpt["train_seconds"]
 | # | Label | Produced by | Read from |
 |---|---|---|---|
 | 3 | `tab:datasets` | `make_paper_tables.py` | `configs/graphs.json` |
-| 6 | `tab:family_comparison` | `family_ctrl_report.py` | `results/family/family_ctrl.csv` |
-| 7 | `tab:statistical_tests` | `family_ctrl_report.py`, `make_paper_tables.py` | `results/family/family_paired.csv` |
-| 8 | `tab:construction_budget` | `family_report.py` | `results/family/family_bench.csv` |
+| 6 | `tab:construction_budget` | `family_report.py` | `results/family/family_bench.csv` |
+| 7 | `tab:family_comparison` | `family_ctrl_report.py` | `results/family/family_ctrl.csv` |
+| 8 | `tab:statistical_tests` | `family_ctrl_report.py`, `make_paper_tables.py` | `results/family/family_paired.csv` |
 | 9 | `tab:ablation` | `make_paper_tables.py` | `results/baselines/ablation/ablation_all_scalar.csv` |
-| 10 | `tab:runtime` | `make_paper_tables.py` | `results/baselines/runtime_benchmark.csv` |
+| 10 | `tab:runtime` | `make_paper_tables.py` | `results/baselines/runtime_benchmark_srv.csv` |
 | 11 | `tab:attack_coverage` | `table_attack_coverage.py` | `results/attack_cov/attack_coverage.csv` |
 | 12 | `tab:advanced_attacks` | `make_paper_tables.py` | `results/advanced/advanced_attacks.csv` |
 | 13 | `tab:sensitivity_ratio` | `make_paper_tables.py` | `results/budget/budget_all.csv` |
@@ -134,6 +134,20 @@ ckpt["cfg"], ckpt["patience"], ckpt["train_seconds"]
 
 Tables 1, 2, 4 and 5 are notation, metric definitions, the list of compared methods and the
 hyperparameter table; they are set by hand, and Table 5 mirrors `configs/method.yaml`.
+
+The two deployment benchmarks are `runtime_benchmark_srv.csv` (the single-campaign server
+measurement reported in Table 10) and `runtime_benchmark.csv` (an earlier desktop campaign,
+kept for reference; its absolute times are roughly a factor of two apart and it is not the
+table in the paper).
+
+Tables 6, 7 and 8 are read from the merged tables `family_ctrl.csv` and `family_paired.csv`,
+and those merges are shipped with the per-cell shards they were built from
+(`results/family/ctrl/` and `results/family/ctrl_romen/`). Running
+`family_ctrl_report.py` therefore rebuilds both merges, and Tables 6--8 reproduce every
+printed cell exactly. The fragments print the family means and every arm, including the
+ablation variants that the manuscript leaves to Table 9; the manuscript adds the
+seed-to-seed standard deviations of `_family_ctrl_meanstd.csv` to Table 7, and trims two
+construction times in Table 6 to one decimal for column width.
 
 ```bash
 python scripts/family_ctrl_report.py
@@ -214,7 +228,7 @@ set, so shards can run in any order and on any number of workers.
 | Omitted | Why | How to obtain |
 |---|---|---|
 | per-cell JSON records (`results/records/`, 13 710 files) | superseded by the tidy CSVs | from the authors |
-| per-cell shards behind Tables 6 and 11 (`family/ctrl*`, `attack_cov*`) | the merged tables reproduce every reported number | from the authors |
+| per-cell shards behind Table 11 (`attack_cov*`) | `results/attack_cov/attack_coverage.csv` carries every reported number | from the authors |
 | training corpus (`dataset/all`, 23 757 graphs) | generated on demand, and too large for a git repository | <https://huggingface.co/datasets/huzhzh/Network_datasets>, or `scripts/generate_training_data.py` |
 | upstream repositories of the compared constructions | the comparison runs through the ports in `bit_hyrl/baselines/`, so every method sees the same cascade, metrics and seeds | <https://github.com/kuaiii/dismantling_topology>, <https://github.com/kuaiii/redesign_topology> |
 

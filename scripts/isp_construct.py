@@ -13,8 +13,11 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from fc_robust import fc_random_moments, fc_targeted_moments
 from param_window import efficiency_ceiling
-import design_map as dz
-import domain_map as dm
+
+#: ``design_map`` and ``domain_map`` are internal exploration helpers that are not
+#: part of the released measurement path. They are imported inside the two
+#: functions that use them so that ``measure``/``fc_targeted`` stay importable
+#: without them.
 
 EPS = 1e-12
 
@@ -367,7 +370,13 @@ def fc_random(adj: List[List[int]], seeds: int = 24, floor: Optional[float] = No
 
 def fc_targeted(adj: List[List[int]], floor: Optional[float] = None,
                 seed: int = 7) -> Dict:
-    """Targeted threshold: remove in descending initial degree, breaking ties at random."""
+    """Targeted threshold: remove in descending initial degree.
+
+    Equal-degree nodes follow a fixed seeded permutation rather than the node
+    identifier, so the removal order is reproducible bit for bit (seed 7). The
+    evaluation curves of the main experiments use the identifier order instead;
+    this sweep only needs a per-graph scalar, not an adversarial permutation.
+    """
     N = len(adj)
     if floor is None:
         floor = 1.0 / math.sqrt(N)
@@ -422,6 +431,8 @@ HS = (2, 3, 4, 6, 8, 12, 16, 24, 32)
 
 def designs_for(N: int, M: int, gseeds: int = 3) -> List[Tuple[str, Dict]]:
     """List the candidate designs for one ISP at its exact (N, M)."""
+    import design_map as dz
+
     kbar = 2.0 * M / N
     out: List[Tuple[str, Dict]] = []
     Kcap = int(min(N - 1, M - (N - 2))) if M >= N - 1 else 0
@@ -507,6 +518,8 @@ def evaluate(name: str, N: int, M: int, seeds: int = 16,
 
 
 def profile(N: int, M: int) -> Dict:
+    import domain_map as dm
+
     kbar = 2.0 * M / N
     Kcap = int(min(N - 1, M - (N - 2)))
     st = dm.stage_of(N, kbar)

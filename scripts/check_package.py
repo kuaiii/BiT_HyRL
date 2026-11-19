@@ -20,7 +20,7 @@ RESULTS = ROOT / "results"
 FIGURES = ROOT / "figures"
 TABLES = ROOT / "paper_tables"
 
-#: Headline values reported in Table 6 and Table 7.
+#: Headline values reported in Table 7 and Table 8.
 R_RES_BIT = 0.4039638666160048
 R_RES_UNITY = 0.3419709509332758
 PAIRED_D_UNITY = 0.06199291568272903
@@ -93,7 +93,7 @@ def _manifest() -> tuple[bool, str]:
             f"{len(entries)} graphs, {len(missing)} missing")
 
 
-@check("Table 6: BiT-HyRL R_res = 0.4040 over thirty topologies")
+@check("Table 7: BiT-HyRL R_res = 0.4040 over thirty topologies")
 def _main_table() -> tuple[bool, str]:
     rows = {row["strategy"]: row for row in read_csv(RESULTS / "family" / "family_ctrl.csv")}
     bit = float(rows["BiT-HyRL"]["All"])
@@ -103,7 +103,7 @@ def _main_table() -> tuple[bool, str]:
     return ok, f"BiT-HyRL {bit:.4f} vs UNITY {unity:.4f}, {len(rows)} strategies"
 
 
-@check("Table 7: paired gain over UNITY = +0.062 (18.1 %), p = 1.6e-5")
+@check("Table 8: paired gain over UNITY = +0.062 (18.1 %), p = 1.6e-5")
 def _paired() -> tuple[bool, str]:
     rows = {row["strategy"]: row for row in read_csv(RESULTS / "family" / "family_paired.csv")}
     unity = rows["UNITY"]
@@ -116,13 +116,30 @@ def _paired() -> tuple[bool, str]:
     return ok, f"d = {diff:+.4f} ({gain:.1%}), p = {p_value:.2e}, n = {unity['n']}"
 
 
-@check("Table 7: every external method is beaten at p < 0.001")
+@check("Table 8: every external method is beaten at p < 0.001")
 def _significance() -> tuple[bool, str]:
     rows = {row["strategy"]: row for row in read_csv(RESULTS / "family" / "family_paired.csv")}
     weak = [name for name in EXTERNAL if float(rows[name]["p_r_res"]) >= 1e-3]
     positive = all(float(rows[name]["d_r_res"]) > 0 for name in EXTERNAL)
     return (not weak and positive, f"min p over externals "
             f"{min(float(rows[n]['p_r_res']) for n in EXTERNAL):.1e}, {len(weak)} not significant")
+
+
+@check("Table 7: the shipped shards rebuild family_ctrl.csv")
+def _shards() -> tuple[bool, str]:
+    shards = RESULTS / "family" / "ctrl"
+    merged = {row["strategy"]: row for row in read_csv(RESULTS / "family" / "family_ctrl.csv")}
+    worst, files = 0.0, 0
+    for strategy in ("BiT-HyRL", "BiT-R", "BiT-E"):
+        total, count = 0.0, 0
+        for path in sorted(shards.glob(f"{strategy}__*.csv")):
+            files += 1
+            for row in read_csv(path):
+                total += float(row["r_res"])
+                count += 1
+        worst = max(worst, abs(total / count - float(merged[strategy]["All"])))
+    return (files == 90 and worst < 5e-6,
+            f"{files} shards, 3 strategies, max |shard - merged| = {worst:.1e}")
 
 
 @check("Figure 4/7 source: curve archive covers BA-100 and Colt at 20 seeds")

@@ -1,16 +1,16 @@
-\begin{table*}[!ht]
-\centering
-\footnotesize
-\caption{Ablation study isolating bimodal topology construction and Hybrid RL placement under controller induced cascading failures. Each entry is the mean over 30 topologies and both attack modes (40 runs per topology); $\pm$ is the seed-to-seed standard deviation measured within a topology and averaged over the thirty topologies, the same quantity Table~\ref{tab:comprehensive_comparison} reports graph by graph. Higher values indicate better performance.}
-\label{tab:ablation_physical_normalized}
-\begin{tabular*}{\textwidth}{@{}l @{\extracolsep{\fill}} *{3}{c} @{}}
-\toprule
-\textbf{Construction arm} & \textbf{$GCC$} & \textbf{$CSA$} & \textbf{$H_C$} \\
-\midrule
-Original topology + PPO & 0.259$\pm$0.081 & 0.220$\pm$0.065 & 0.381$\pm$0.068 \\
-Original degree sequence, rewired & 0.282$\pm$0.080 & 0.235$\pm$0.064 & 0.395$\pm$0.060 \\
-Near-regular degree sequence ($c=1.0$) & 0.378$\pm$0.012 & 0.319$\pm$0.010 & 0.522$\pm$0.046 \\
-BiT-HyRL ($c=1.6$) & 0.378$\pm$0.015 & 0.319$\pm$0.013 & 0.520$\pm$0.053 \\
-\bottomrule
-\end{tabular*}
-\end{table*}
+\begin{table}[!t]
+  \centering
+  \caption{Ablation of the topology construction under the controller-induced cascade. All three arms use the same learned placement policy, so the row that changes is the substrate: the graph as given, that graph re-randomised at fixed degree sequence, and the reconstructed graph. Each entry is the mean over the 30 topologies (both attack modes, twenty campaign seeds each) $\pm$ the half-width of the two-sided 95\% confidence interval of that mean ($n=30$, Student-$t$, $29$ degrees of freedom); it is a confidence half-width, not a standard deviation. Higher is better.}
+  \label{tab:ablation}
+  \scriptsize
+  \setlength{\tabcolsep}{2pt}
+  \begin{tabular*}{\columnwidth}{@{}l @{\extracolsep{\fill}} *{4}{c}@{}}
+  \toprule
+  \textbf{Construction arm} & \textbf{$GCC$} & \textbf{$CSA$} & \textbf{$H_C$} & \textbf{$R_{\mathrm{res}}$} \\
+  \midrule
+Un-reconstructed & 0.259$\pm$0.038 & 0.220$\pm$0.034 & 0.381$\pm$0.058 & 0.287$\pm$0.043 \\
+Rewired & 0.282$\pm$0.039 & 0.235$\pm$0.035 & 0.395$\pm$0.055 & 0.304$\pm$0.043 \\
+BiT-HyRL & 0.378$\pm$0.044 & 0.318$\pm$0.040 & 0.516$\pm$0.058 & 0.404$\pm$0.047 \\
+  \bottomrule
+  \end{tabular*}
+\end{table}

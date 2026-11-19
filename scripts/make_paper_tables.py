@@ -474,10 +474,17 @@ def table_aggregate_30() -> str:
 
 
 def table_runtime() -> str:
-    """Table: deployment-stage cost, measured rather than inherited."""
-    path = BASELINES / "runtime_benchmark.csv"
+    """Table: deployment-stage cost, measured rather than inherited.
+
+    The manuscript reports the single-campaign server measurement
+    (``runtime_benchmark_srv.csv``); the desktop campaign is kept as
+    ``runtime_benchmark.csv`` for reference but is not the table in the paper.
+    """
+    path = BASELINES / "runtime_benchmark_srv.csv"
     if not path.exists():
-        return "% runtime_benchmark.csv missing"
+        path = BASELINES / "runtime_benchmark.csv"
+    if not path.exists():
+        return "% runtime_benchmark_srv.csv missing"
     frame = pd.read_csv(path)
     scales = ("BA-100", "BA-200", "BA-300", "BA-500", "BA-1000")
     order = ("Baseline", "UNITY", "FRED-ABL", "BiT-HyRL",
@@ -492,10 +499,9 @@ def table_runtime() -> str:
             value = lookup.get((method, scale))
             if value is None or pd.isna(value):
                 cells.append("--")
-            elif scale == "BA-1000" and value >= 100:
-                cells.append(f"{value:.1f}")
             else:
-                cells.append(f"{value:.2f}")
+                # two decimals throughout; the epsilon makes .005 round up as in the table
+                cells.append(f"{value + 1e-9:.2f}")
         if method == "BiT-HyRL":
             lines.append("\\midrule")
         lines.append(f"{method} & " + " & ".join(cells) + " \\\\")
@@ -504,15 +510,12 @@ def table_runtime() -> str:
     head = ("\\begin{table}[!htbp]\n\\centering\n\\small\n"
             "\\setlength{\\tabcolsep}{4pt}\n"
             "\\caption{Deployment-stage cost in seconds: reconstruction of the substrate plus "
-            "selection of the controller set, measured on one CPU core with the same checkpoint "
-            "for every row. Cascade evaluation and PPO training are excluded, because both are "
-            "offline or amortised. Columns are the BA scale; the header gives $N$. A dash marks "
-            "a cell that this benchmark did not measure: ONION, Eff-R-Net and QDLM exceed "
-            "fifteen minutes at $N=1000$, and ROMEN was timed only up to $N=200$ here. Its cost "
-            "at the larger scales is reported in Section~\\ref{ss:runtime}, where a single "
-            "measurement at $N=500$ takes $0.59$~ks and $6.7$~GB of resident memory. Values are "
-            "medians over three runs where the method completes quickly, and a single run "
-            "otherwise.}\n"
+            "selection of the controller set, measured on one CPU core on a single machine in one "
+            "campaign, with the same checkpoint and placement strategy for every row. Cascade "
+            "evaluation and PPO training are excluded, because both are offline or amortised. "
+            "Columns are the BA scale; the header gives $N$. Each entry is a single run. A slower "
+            "campaign on a different machine is archived as \\texttt{runtime\\_benchmark.csv} and "
+            "is not the table reported in the manuscript.}\n"
             "\\label{tab:runtime}\n"
             "\\begin{tabular}{@{}l *{5}{r}@{}}\n\\toprule\n"
             "\\textbf{Method} & \\textbf{100} & \\textbf{200} & \\textbf{300} & "

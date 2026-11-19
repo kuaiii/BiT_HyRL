@@ -1,24 +1,36 @@
 \begin{table}[!htbp]
   \centering
-  \caption{Paired comparison against BiT-HyRL, one observation per topology ($n=30$). Positive differences indicate that BiT-HyRL is better. $p$ is the exact two-sided Wilcoxon signed-rank test on the per-topology differences, Holm-corrected across the four metrics within each row; every reported difference is significant at $p<0.001$.}
+  \caption{Paired comparison against BiT-HyRL, one observation per topology ($n_{\mathrm{topo}}=30$). Positive differences indicate that BiT-HyRL is better. Each cell gives the mean paired difference and, beneath it, the two-sided 95\% confidence interval of that mean (Student-$t$ interval on the per-topology differences, $29$ degrees of freedom); every interval excludes zero. All differences are significant after Holm correction across the four metrics within a row ($p<0.001$).}
   \label{tab:statistical_tests}
-  \small
-  \setlength{\tabcolsep}{3pt}
-  \begin{tabular}{@{}l r *{4}{c}@{}}
+  \scriptsize
+  \setlength{\tabcolsep}{2pt}
+  \begin{tabular*}{\columnwidth}{@{}l @{\extracolsep{\fill}} r *{4}{c}@{}}
   \toprule
-  \textbf{Method} & \textbf{$n$} & \textbf{$\Delta GCC$} & \textbf{$\Delta CSA$} & \textbf{$\Delta H_C$} & \textbf{$\Delta R_{\mathrm{res}}$} \\
+  \textbf{Method} & \textbf{$n_{\mathrm{topo}}$} & \textbf{$GCC$} & \textbf{$CSA$} & \textbf{$H_C$} & \textbf{$R_{\mathrm{res}}$} \\
   \midrule
-UNITY & 30 & +0.040 & +0.042 & +0.104 & +0.062 \\
-QDLM & 30 & +0.061 & +0.056 & +0.117 & +0.078 \\
-FRED-ABL & 30 & +0.066 & +0.061 & +0.124 & +0.084 \\
-Eff-R-Net & 30 & +0.088 & +0.082 & +0.152 & +0.107 \\
-ONION & 30 & +0.107 & +0.096 & +0.164 & +0.123 \\
-ROMEN & 30 & +0.086 & +0.079 & +0.147 & +0.104 \\
-MADQN & 30 & +0.123 & +0.105 & +0.172 & +0.133 \\
-MWCL & 30 & +0.117 & +0.095 & +0.134 & +0.115 \\
-KMedian & 30 & +0.123 & +0.107 & +0.176 & +0.135 \\
+  & & \multicolumn{4}{c}{$\Delta$ [95\% CI]} \\
+  \midrule
+UNITY & 30 & $+0.040$ & $+0.042$ & $+0.104$ & $+0.062$ \\
+ & & $[0.031,0.049]$ & $[0.032,0.051]$ & $[0.074,0.134]$ & $[0.047,0.077]$ \\
+QDLM & 30 & $+0.061$ & $+0.056$ & $+0.117$ & $+0.078$ \\
+ & & $[0.041,0.081]$ & $[0.040,0.072]$ & $[0.083,0.151]$ & $[0.055,0.101]$ \\
+FRED-ABL & 30 & $+0.066$ & $+0.061$ & $+0.124$ & $+0.084$ \\
+ & & $[0.045,0.086]$ & $[0.044,0.077]$ & $[0.089,0.159]$ & $[0.060,0.107]$ \\
+Eff-R-Net & 30 & $+0.088$ & $+0.082$ & $+0.152$ & $+0.107$ \\
+ & & $[0.055,0.121]$ & $[0.054,0.110]$ & $[0.095,0.209]$ & $[0.068,0.146]$ \\
+ONION & 30 & $+0.107$ & $+0.096$ & $+0.164$ & $+0.123$ \\
+ & & $[0.079,0.136]$ & $[0.072,0.120]$ & $[0.111,0.218]$ & $[0.088,0.157]$ \\
+ROMEN & 30 & $+0.086$ & $+0.079$ & $+0.147$ & $+0.104$ \\
+ & & $[0.055,0.118]$ & $[0.053,0.106]$ & $[0.093,0.202]$ & $[0.067,0.141]$ \\
+MADQN & 30 & $+0.123$ & $+0.105$ & $+0.172$ & $+0.133$ \\
+ & & $[0.097,0.148]$ & $[0.083,0.127]$ & $[0.121,0.222]$ & $[0.101,0.165]$ \\
+MWCL & 30 & $+0.117$ & $+0.095$ & $+0.134$ & $+0.115$ \\
+ & & $[0.091,0.143]$ & $[0.072,0.118]$ & $[0.074,0.194]$ & $[0.080,0.151]$ \\
+KMedian & 30 & $+0.123$ & $+0.107$ & $+0.176$ & $+0.135$ \\
+ & & $[0.097,0.149]$ & $[0.085,0.130]$ & $[0.126,0.226]$ & $[0.103,0.167]$ \\
 \midrule
-Random-pl. & 30 & +0.120 & +0.098 & +0.171 & +0.130 \\
+Random-pl. & 30 & $+0.120$ & $+0.098$ & $+0.170$ & $+0.130$ \\
+ & & $[0.094,0.146]$ & $[0.075,0.121]$ & $[0.111,0.230]$ & $[0.094,0.165]$ \\
   \bottomrule
-  \end{tabular}
+\end{tabular*}
 \end{table}
