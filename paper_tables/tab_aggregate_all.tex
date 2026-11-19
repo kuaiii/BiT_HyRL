@@ -1,0 +1,29 @@
+\begin{table}[!htbp]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{All strategies aggregated over the full suite of 30 topologies (six BA scales, six Erd\H{o}s--R\'enyi, six Watts--Strogatz, six router-level ISP maps and six AS-level snapshots). Every entry is the mean of the per-topology scores, so each topology carries equal weight. The last column is the difference against the un-reconstructed topology. Every row covers all 30 topologies.}
+\label{tab:aggregate_all}
+\begin{tabular}{@{}l *{3}{c} r r@{}}
+\toprule
+\textbf{Strategy} & \textbf{$GCC$} & \textbf{$CSA$} & \textbf{$H_C$} & \textbf{$R_{\mathrm{res}}$} & \textbf{$\Delta$ vs none} \\
+\midrule
+BiT-HyRL & 0.378 & 0.318 & 0.516 & 0.4040 & +0.1174 \\
+BiT-c1.0 & 0.378 & 0.319 & 0.522 & 0.4065 & +0.1198 \\
+BiT-degOnly & 0.282 & 0.235 & 0.395 & 0.3038 & +0.0172 \\
+\midrule
+BiT-norecon & 0.259 & 0.220 & 0.381 & 0.2866 & +0.0000 \\
+\midrule
+UNITY & 0.338 & 0.277 & 0.411 & 0.3420 & +0.0553 \\
+QDLM & 0.317 & 0.262 & 0.399 & 0.3260 & +0.0394 \\
+FRED-ABL & 0.312 & 0.258 & 0.392 & 0.3204 & +0.0338 \\
+ROMEN & 0.291 & 0.239 & 0.368 & 0.2996 & +0.0130 \\
+Eff-R-Net & 0.290 & 0.237 & 0.364 & 0.2967 & +0.0101 \\
+ONION & 0.270 & 0.222 & 0.351 & 0.2814 & -0.0052 \\
+MWCL & 0.261 & 0.223 & 0.382 & 0.2886 & +0.0020 \\
+MADQN & 0.255 & 0.213 & 0.344 & 0.2709 & -0.0158 \\
+KMedian & 0.255 & 0.211 & 0.340 & 0.2687 & -0.0179 \\
+Random-pl. & 0.258 & 0.220 & 0.345 & 0.2744 & -0.0122 \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,9 @@
+# keep the tree byte-identical across platforms
+* text=auto eol=lf
+
+# data / binary artefacts
+*.pt binary
+*.pdf binary
+*.png binary
+*.gml text
+*.csv text

@@ -1,0 +1,21 @@
+attacks:
+  default: random
+  supported:
+    - random
+    - degree
+    - betweenness
+    - pagerank
+    - eigenvector
+    - adaptive_degree
+    - adaptive_betweenness
+    - adaptive_bridge
+    - lookahead_gcc
+    - bruteforce
+    - wgcc
+  wgcc:
+    components:
+      - degree
+      - random
+    weights:
+      degree: 0.5
+      random: 0.5

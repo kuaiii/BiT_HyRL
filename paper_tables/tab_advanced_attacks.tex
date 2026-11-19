@@ -1,0 +1,25 @@
+\begin{table*}[!ht]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\caption{Comparison under four advanced attack models on the synthetic BA family, averaged over the five scales (BA-100 to BA-500) and three attack seeds ($n=15$ per cell). $GCC$ is the primary metric; $CSA$ and $H_C$ are auxiliary. Best per column in \textbf{bold}, second best \underline{underlined}.}
+\label{tab:advanced_attacks}
+\begin{tabular*}{\textwidth}{@{}l @{\extracolsep{\fill}} *{12}{c} @{}}
+\toprule
+\multirow{2}{*}{\textbf{Method}} & \multicolumn{3}{c}{\textbf{Adaptive}} & \multicolumn{3}{c}{\textbf{Correlated}} & \multicolumn{3}{c}{\textbf{Multi-stage}} & \multicolumn{3}{c}{\textbf{GDM}} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10} \cmidrule(l){11-13}
+& \textbf{GCC} & \textbf{$CSA$} & \textbf{$H_C$} & \textbf{GCC} & \textbf{$CSA$} & \textbf{$H_C$} & \textbf{GCC} & \textbf{$CSA$} & \textbf{$H_C$} & \textbf{GCC} & \textbf{$CSA$} & \textbf{$H_C$} \\
+\midrule
+Baseline & 0.181 & 0.156 & 0.321 & 0.183 & 0.157 & 0.328 & 0.181 & 0.156 & 0.321 & 0.190 & 0.161 & 0.322 \\
+FRED-ABL & 0.277 & 0.237 & 0.385 & 0.282 & 0.242 & 0.400 & 0.273 & 0.234 & 0.391 & 0.291 & 0.247 & 0.430 \\
+Eff-R-Net & 0.184 & 0.157 & 0.305 & 0.187 & 0.160 & 0.317 & 0.184 & 0.157 & 0.305 & 0.192 & 0.163 & 0.312 \\
+ONION & 0.192 & 0.163 & 0.330 & 0.193 & 0.165 & 0.336 & 0.191 & 0.163 & 0.328 & 0.202 & 0.170 & 0.330 \\
+QDLM & 0.282 & 0.240 & 0.396 & 0.285 & 0.243 & 0.404 & 0.278 & 0.238 & 0.408 & 0.297 & 0.252 & 0.436 \\
+ROMEN & 0.235 & 0.198 & 0.348 & 0.233 & 0.197 & 0.370 & 0.234 & 0.198 & 0.362 & 0.233 & 0.194 & 0.342 \\
+UNITY & \underline{0.331} & \underline{0.281} & \underline{0.469} & \underline{0.336} & \underline{0.285} & \underline{0.490} & \underline{0.327} & \underline{0.277} & \underline{0.469} & \underline{0.347} & \underline{0.293} & \textbf{0.532} \\
+\midrule
+\specialrule{0.08em}{0pt}{0pt}
+BiT-HyRL & \textbf{0.358} & \textbf{0.304} & \textbf{0.480} & \textbf{0.384} & \textbf{0.327} & \textbf{0.511} & \textbf{0.363} & \textbf{0.306} & \textbf{0.506} & \textbf{0.414} & \textbf{0.333} & \underline{0.485} \\
+\bottomrule
+\end{tabular*}
+\end{table*}

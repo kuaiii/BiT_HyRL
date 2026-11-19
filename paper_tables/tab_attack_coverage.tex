@@ -1,0 +1,25 @@
+\begin{table*}[!ht]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{6pt}
+\caption{Attack coverage. Mean $R_{\mathrm{res}}$ over the nine topologies of Table~\ref{tab:comprehensive_comparison}, 20 seeds per cell, under each of the five targeted orderings and the uniform random attack. The last column averages the five targeted columns and is the quantity the balanced protocol of Section~\ref{s:Evaluation} would use if the targeted mode were defined on all five rather than on degree ordering alone. Best entry of each column in \textbf{bold}.}
+\label{tab:attack_coverage}
+\begin{tabular*}{\textwidth}{@{}l @{\extracolsep{\fill}} *{7}{c}@{}}
+\toprule
+\textbf{Strategy} & \textbf{Degree} & \textbf{Betweenness} & \textbf{Closeness} & \textbf{Coreness} & \textbf{Eigenvector} & \textbf{Random} & \textbf{Targeted mean} \\
+\midrule
+BiT-HyRL & \textbf{0.368} & \textbf{0.393} & \textbf{0.444} & \textbf{0.368} & \textbf{0.458} & 0.349 & \textbf{0.406} \\
+\midrule
+UNITY & 0.229 & 0.258 & 0.331 & 0.367 & 0.334 & 0.377 & 0.304 \\
+QDLM & 0.222 & 0.228 & 0.291 & 0.315 & 0.306 & \textbf{0.382} & 0.273 \\
+FRED-ABL & 0.213 & 0.224 & 0.285 & 0.315 & 0.299 & 0.381 & 0.267 \\
+Eff-R-Net & 0.151 & 0.162 & 0.235 & 0.245 & 0.250 & 0.353 & 0.209 \\
+ONION & 0.144 & 0.158 & 0.237 & 0.250 & 0.256 & 0.352 & 0.209 \\
+ROMEN & 0.177 & 0.190 & 0.267 & 0.267 & 0.281 & 0.354 & 0.236 \\
+MWCL-sim & 0.174 & 0.198 & 0.277 & 0.263 & 0.276 & 0.324 & 0.237 \\
+MADQN-sim & 0.128 & 0.150 & 0.229 & 0.240 & 0.233 & 0.342 & 0.196 \\
+KMedian & 0.115 & 0.134 & 0.208 & 0.221 & 0.214 & 0.344 & 0.178 \\
+Random-placement & 0.159 & 0.173 & 0.241 & 0.254 & 0.245 & 0.306 & 0.215 \\
+\bottomrule
+\end{tabular*}
+\end{table*}

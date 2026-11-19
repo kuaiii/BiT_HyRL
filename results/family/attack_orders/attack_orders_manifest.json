@@ -1,0 +1,80 @@
+{
+  "generated_rows": 7200,
+  "expected_rows": 7200,
+  "missing_rows": 0,
+  "datasets": [
+    "AS-19981229",
+    "AS-19981231",
+    "AS-19990108",
+    "AS-19990110",
+    "AS-19991208",
+    "AS-19991210",
+    "BA-100",
+    "BA-1000",
+    "BA-200",
+    "BA-300",
+    "BA-400",
+    "BA-500",
+    "Cogentco",
+    "Colt",
+    "DialtelecomCz",
+    "ER-100",
+    "ER-1000",
+    "ER-200",
+    "ER-300",
+    "ER-400",
+    "ER-500",
+    "GtsCe",
+    "UsCarrier",
+    "VtlWavenet2011",
+    "WS-100",
+    "WS-1000",
+    "WS-200",
+    "WS-300",
+    "WS-400",
+    "WS-500"
+  ],
+  "methods": [
+    "BiT-HyRL",
+    "UNITY",
+    "WS",
+    "QDLM",
+    "FRED-ABL",
+    "ROMEN",
+    "BA",
+    "Original"
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "orders": [
+    "degree",
+    "betweenness",
+    "closeness",
+    "coreness",
+    "eigenvector",
+    "random"
+  ],
+  "bootstrap": 10000,
+  "interval": "95% cluster bootstrap over graphs (seeds averaged within a graph)",
+  "shards": [
+    {
+      "file": "probe_all.csv",
+      "sha256": "0933b9508d1c4528bc07099ca30958222532ac3b87a766dcd0bd64cdb41aeb33"
+    }
+  ],
+  "outputs": {
+    "attack_orders_detail.csv": {
+      "rows": 7200,
+      "sha256": "413692cd34ba986c39f266a10b6e36fd50af82941fc06a32e9e333d16ee90b9f"
+    },
+    "attack_orders_summary.csv": {
+      "rows": 48,
+      "sha256": "233058951027bf6e7178bd10126e269287d6dcf3812a829ec287f2e311567d45"
+    }
+  }
+}

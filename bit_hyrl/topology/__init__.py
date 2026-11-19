@@ -1,0 +1,113 @@
+"""BiT layer: degree planning, deterministic realisation, diagnostics, sweep.
+
+This subpackage is the *only* place that knows how a bimodal topology is built.
+It never imports the controller or the RL layer, which is what makes the
+topology layer independently evaluable.
+
+Note on naming (D8): the Sarle bimodality coefficient is exported as
+``bc_internal`` / ``bc_internal_betweenness`` and is an **internal diagnostic
+only** — it must never reach a paper figure, a table, or an
+``EvaluationRecord``.  See :mod:`bit_hyrl.topology.diagnostics`.
+"""
+
+from __future__ import annotations
+
+from .builder import (
+    DEFAULT_REWIRE_SWAPS_PER_EDGE,
+    REALIZE_MODES,
+    ConstructionError,
+    ConstructionResult,
+    build_bimodal_graph,
+    build_from_sequence,
+    degree_preserving_swaps,
+    realized_histogram,
+    repair_connectivity,
+    rewire_preserving_connectivity,
+)
+from .degree_sequence import (
+    DegreePlan,
+    DegreeSequenceError,
+    build_degree_list,
+    plan_degree_sequence,
+    round_half_up,
+    validate_plan,
+)
+from .diagnostics import (
+    UNIFORM_BC_INTERNAL,
+    TopologyDiagnostics,
+    as_public,
+    bc_internal,
+    degree_statistics,
+    diagnose,
+    kappa,
+    path_statistics,
+    peak_structure,
+    peak_structure_from_graph,
+    public_diagnostic_keys,
+)
+from .graphicality import (
+    GraphicalityLog,
+    InfeasibleDegreeSequence,
+    erdos_gallai,
+    havel_hakimi,
+    is_graphical,
+    realize_with_downgrade,
+)
+from .sweep import (
+    C_NORM_GRID,
+    DEFAULT_C_GRID,
+    SWEEP_FIELDS,
+    c_star_for,
+    sweep_c,
+    sweep_c_norm,
+    sweep_dataset,
+    sweep_dataset_c_norm,
+    sweep_row,
+    write_sweep_outputs,
+)
+
+__all__ = [
+    "C_NORM_GRID",
+    "DEFAULT_C_GRID",
+    "DEFAULT_REWIRE_SWAPS_PER_EDGE",
+    "REALIZE_MODES",
+    "SWEEP_FIELDS",
+    "UNIFORM_BC_INTERNAL",
+    "ConstructionError",
+    "ConstructionResult",
+    "DegreePlan",
+    "DegreeSequenceError",
+    "GraphicalityLog",
+    "InfeasibleDegreeSequence",
+    "TopologyDiagnostics",
+    "as_public",
+    "bc_internal",
+    "build_bimodal_graph",
+    "build_degree_list",
+    "build_from_sequence",
+    "c_star_for",
+    "degree_preserving_swaps",
+    "degree_statistics",
+    "diagnose",
+    "erdos_gallai",
+    "havel_hakimi",
+    "is_graphical",
+    "kappa",
+    "path_statistics",
+    "peak_structure",
+    "peak_structure_from_graph",
+    "plan_degree_sequence",
+    "public_diagnostic_keys",
+    "realize_with_downgrade",
+    "realized_histogram",
+    "repair_connectivity",
+    "rewire_preserving_connectivity",
+    "round_half_up",
+    "sweep_c",
+    "sweep_c_norm",
+    "sweep_dataset",
+    "sweep_dataset_c_norm",
+    "sweep_row",
+    "validate_plan",
+    "write_sweep_outputs",
+]

@@ -1,0 +1,8 @@
+datasets:
+  search_paths:
+    - dataset/testdata
+    - dataset/all
+  default: GtsCe
+  split_policy:
+    train: dataset/all
+    validation: dataset/testdata

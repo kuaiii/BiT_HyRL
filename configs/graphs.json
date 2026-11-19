@@ -1,0 +1,276 @@
+{
+  "_comment": "评测图清单与金标准 (N, M)。扩至 30 图（每族 6 张）：BA/ER/WS 合成（N∈{100..1000}）、6 家真实 ISP 路由器级（Cogentco/Colt/GtsCe/UsCarrier/DialtelecomCz/VtlWavenet2011）、6 张 SNAP as-733 BGP-AS 快照。n/m/duplicates_removed/raw_edge_records 为硬约束，sha256 为归一化后排序边表哈希。",
+  "schema_version": "bit_hyrl/fingerprint/1.0",
+  "graphs": [
+    {
+      "dataset": "BA-100",
+      "path": "dataset/testdata/BA-100.gml",
+      "n": 100,
+      "m": 291,
+      "raw_edge_records": 291,
+      "duplicates_removed": 0,
+      "sha256": "370922bc2911dc9ae3036f2daee253830c15445f054f34e19bc4a2302114ea52"
+    },
+    {
+      "dataset": "BA-200",
+      "path": "dataset/testdata/BA-200.gml",
+      "n": 200,
+      "m": 591,
+      "raw_edge_records": 591,
+      "duplicates_removed": 0,
+      "sha256": "a847d291d134c7a2a51774ea0ffeb9c72cbb3eefbd518ed1a0291fa66a82a3fc"
+    },
+    {
+      "dataset": "BA-300",
+      "path": "dataset/testdata/BA-300.gml",
+      "n": 300,
+      "m": 891,
+      "raw_edge_records": 891,
+      "duplicates_removed": 0,
+      "sha256": "97ccb393b85badf5c9097eb661be32b18068857edf2728dfeb429ea28170c692"
+    },
+    {
+      "dataset": "BA-400",
+      "path": "dataset/testdata/BA-400.gml",
+      "n": 400,
+      "m": 1191,
+      "raw_edge_records": 1191,
+      "duplicates_removed": 0,
+      "sha256": "2037f9a64925707b706515716bb5305028f2797f2fd6bb17975814a3e1de02da"
+    },
+    {
+      "dataset": "BA-500",
+      "path": "dataset/testdata/BA-500.gml",
+      "n": 500,
+      "m": 1491,
+      "raw_edge_records": 1491,
+      "duplicates_removed": 0,
+      "sha256": "6e60e8af7b3c8b581d83e737027291cf5cc7deffaa2410be66a16f960e079de0"
+    },
+    {
+      "dataset": "BA-1000",
+      "path": "dataset/testdata/BA-1000.gml",
+      "n": 1000,
+      "m": 2991,
+      "raw_edge_records": 2991,
+      "duplicates_removed": 0,
+      "sha256": "aa5df103f3b20c3a2431e1453e5a14a8435d2e979acb8afc357b1af6e7957c46"
+    },
+    {
+      "dataset": "ER-100",
+      "path": "dataset/testdata/ER-100.gml",
+      "n": 100,
+      "m": 291,
+      "raw_edge_records": 291,
+      "duplicates_removed": 0,
+      "sha256": "a781554324cac9ead2874845f97cbb3ed2a9f823318a645464e9ed5fccb9fa04"
+    },
+    {
+      "dataset": "ER-200",
+      "path": "dataset/testdata/ER-200.gml",
+      "n": 200,
+      "m": 572,
+      "raw_edge_records": 572,
+      "duplicates_removed": 0,
+      "sha256": "af5d9fc69a80495137fc57ae4efee2b1ed481283dd0d74c61c0f5acd25d2f41f"
+    },
+    {
+      "dataset": "ER-300",
+      "path": "dataset/testdata/ER-300.gml",
+      "n": 300,
+      "m": 884,
+      "raw_edge_records": 884,
+      "duplicates_removed": 0,
+      "sha256": "e000515bc98bb63a8d841f5acf29c8d36d9fdc8f244c917b185abc1db3e7db32"
+    },
+    {
+      "dataset": "ER-400",
+      "path": "dataset/testdata/ER-400.gml",
+      "n": 400,
+      "m": 1202,
+      "raw_edge_records": 1202,
+      "duplicates_removed": 0,
+      "sha256": "4e6ba74da28bf137c39bfb778651953291d6758f2382ca85aad4125ac405289a"
+    },
+    {
+      "dataset": "ER-500",
+      "path": "dataset/testdata/ER-500.gml",
+      "n": 500,
+      "m": 1498,
+      "raw_edge_records": 1498,
+      "duplicates_removed": 0,
+      "sha256": "1466397cb21d25247eba18c8706e1a79b3c29a318f506a5169f7ba41215f2472"
+    },
+    {
+      "dataset": "ER-1000",
+      "path": "dataset/testdata/ER-1000.gml",
+      "n": 1000,
+      "m": 3024,
+      "raw_edge_records": 3024,
+      "duplicates_removed": 0,
+      "sha256": "7ea9f895031d89774a6dc8a017643f77169e6b44cb77075589c09504d20bc6a0"
+    },
+    {
+      "dataset": "WS-100",
+      "path": "dataset/testdata/WS-100.gml",
+      "n": 100,
+      "m": 200,
+      "raw_edge_records": 200,
+      "duplicates_removed": 0,
+      "sha256": "8936eeef7b2b240a442f55e6113ff5aa69c89123dda4d1766cf3ed2b1ec73260"
+    },
+    {
+      "dataset": "WS-200",
+      "path": "dataset/testdata/WS-200.gml",
+      "n": 200,
+      "m": 400,
+      "raw_edge_records": 400,
+      "duplicates_removed": 0,
+      "sha256": "88b16963457da706561c75193eeac257eaa7b98b2317597bcfefb52003e4612b"
+    },
+    {
+      "dataset": "WS-300",
+      "path": "dataset/testdata/WS-300.gml",
+      "n": 300,
+      "m": 600,
+      "raw_edge_records": 600,
+      "duplicates_removed": 0,
+      "sha256": "b61eba51a4333d72bb11e35cc47fb19304be1304ce279d977450fa10b5567abd"
+    },
+    {
+      "dataset": "WS-400",
+      "path": "dataset/testdata/WS-400.gml",
+      "n": 400,
+      "m": 800,
+      "raw_edge_records": 800,
+      "duplicates_removed": 0,
+      "sha256": "cbb7842052932ee5c929c23ec8d39e5267b2a1991064a27299110d8e097b6214"
+    },
+    {
+      "dataset": "WS-500",
+      "path": "dataset/testdata/WS-500.gml",
+      "n": 500,
+      "m": 1000,
+      "raw_edge_records": 1000,
+      "duplicates_removed": 0,
+      "sha256": "923310b27e46ad1a351964a5510fc843a2f1d9842e3b327e4bfffee9a68e5cb4"
+    },
+    {
+      "dataset": "WS-1000",
+      "path": "dataset/testdata/WS-1000.gml",
+      "n": 1000,
+      "m": 2000,
+      "raw_edge_records": 2000,
+      "duplicates_removed": 0,
+      "sha256": "e6c51900ea7d5e6d2d85d93c132d3c301d07995389ede45ff2aa3f6f44d0a1f3"
+    },
+    {
+      "dataset": "Cogentco",
+      "path": "dataset/testdata/Cogentco.gml",
+      "n": 197,
+      "m": 243,
+      "raw_edge_records": 245,
+      "duplicates_removed": 2,
+      "sha256": "f315659cac01b20acc09b182339a4f1f50e53ab5b013d45ce31d63db0f665357"
+    },
+    {
+      "dataset": "Colt",
+      "path": "dataset/testdata/Colt.gml",
+      "n": 153,
+      "m": 177,
+      "raw_edge_records": 191,
+      "duplicates_removed": 14,
+      "sha256": "a1509470bef048f11bd40fe921756f844d6abdd8f06513f51bc07ae5518edbe6"
+    },
+    {
+      "dataset": "GtsCe",
+      "path": "dataset/testdata/GtsCe.gml",
+      "n": 149,
+      "m": 193,
+      "raw_edge_records": 193,
+      "duplicates_removed": 0,
+      "sha256": "54f39aaa887fe16567561407ac00813b2653157d8b3c3ddc203110f2754a80af"
+    },
+    {
+      "dataset": "UsCarrier",
+      "path": "dataset/testdata/UsCarrier.gml",
+      "n": 158,
+      "m": 189,
+      "raw_edge_records": 189,
+      "duplicates_removed": 0,
+      "sha256": "4a9c953eb20bdd2cd562aeb0937bfa4d2583d3ea67a9bd7f74d8ba0481c1c4dc"
+    },
+    {
+      "dataset": "DialtelecomCz",
+      "path": "dataset/testdata/DialtelecomCz.gml",
+      "n": 138,
+      "m": 151,
+      "raw_edge_records": 151,
+      "duplicates_removed": 0,
+      "sha256": "7d628c22f3844fee37517365138bfb5ddd14c8de94c8a9f6ef8187af2760db9f"
+    },
+    {
+      "dataset": "VtlWavenet2011",
+      "path": "dataset/testdata/VtlWavenet2011.gml",
+      "n": 92,
+      "m": 96,
+      "raw_edge_records": 96,
+      "duplicates_removed": 0,
+      "sha256": "a24b448f4a60db94e45f873e05cb28eef5de801997799a3296fa04462b215f54"
+    },
+    {
+      "dataset": "AS-19981229",
+      "path": "dataset/testdata/AS-19981229.txt",
+      "n": 493,
+      "m": 1145,
+      "raw_edge_records": 1145,
+      "duplicates_removed": 0,
+      "sha256": "49d1df9331c233a52b0aa2aa3d55fd4bd144eeb58f139cf1ada7e06fa9081e38"
+    },
+    {
+      "dataset": "AS-19981231",
+      "path": "dataset/testdata/AS-19981231.txt",
+      "n": 512,
+      "m": 1181,
+      "raw_edge_records": 1181,
+      "duplicates_removed": 0,
+      "sha256": "3a1725cd1536011be7125a9203cb05006751ddce945fe5545a1346d83c61e119"
+    },
+    {
+      "dataset": "AS-19990108",
+      "path": "dataset/testdata/AS-19990108.txt",
+      "n": 557,
+      "m": 1278,
+      "raw_edge_records": 1278,
+      "duplicates_removed": 0,
+      "sha256": "bd5fc0dcbbc1528cacfca345c503b2a1873aa07e5b1287257f809d05c986f378"
+    },
+    {
+      "dataset": "AS-19990110",
+      "path": "dataset/testdata/AS-19990110.txt",
+      "n": 561,
+      "m": 1280,
+      "raw_edge_records": 1280,
+      "duplicates_removed": 0,
+      "sha256": "a247928842e68e5b00cce2833a1c897c9abd074672b676bcbaf67b07bbea1fa3"
+    },
+    {
+      "dataset": "AS-19991208",
+      "path": "dataset/testdata/AS-19991208.txt",
+      "n": 767,
+      "m": 1734,
+      "raw_edge_records": 1734,
+      "duplicates_removed": 0,
+      "sha256": "d7271e5aa98c67f1f92cfa95c02010553edccdbaad3c7ffc3f61d822c95058a8"
+    },
+    {
+      "dataset": "AS-19991210",
+      "path": "dataset/testdata/AS-19991210.txt",
+      "n": 1486,
+      "m": 3172,
+      "raw_edge_records": 3172,
+      "duplicates_removed": 0,
+      "sha256": "aa72c23757308d0d1cd842404de27df27cd4b190638b3a129cbb1a69e64de613"
+    }
+  ]
+}

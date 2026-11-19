@@ -1,0 +1,24 @@
+\begin{table}[!htbp]
+  \centering
+  \caption{Paired comparison against BiT-HyRL, one observation per topology ($n=30$). Positive differences indicate that BiT-HyRL is better. $p$ is the exact two-sided Wilcoxon signed-rank test on the per-topology differences, Holm-corrected across the four metrics within each row; every reported difference is significant at $p<0.001$.}
+  \label{tab:statistical_tests}
+  \small
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabular}{@{}l r *{4}{c}@{}}
+  \toprule
+  \textbf{Method} & \textbf{$n$} & \textbf{$\Delta GCC$} & \textbf{$\Delta CSA$} & \textbf{$\Delta H_C$} & \textbf{$\Delta R_{\mathrm{res}}$} \\
+  \midrule
+UNITY & 30 & +0.040 & +0.042 & +0.104 & +0.062 \\
+QDLM & 30 & +0.061 & +0.056 & +0.117 & +0.078 \\
+FRED-ABL & 30 & +0.066 & +0.061 & +0.124 & +0.084 \\
+Eff-R-Net & 30 & +0.088 & +0.082 & +0.152 & +0.107 \\
+ONION & 30 & +0.107 & +0.096 & +0.164 & +0.123 \\
+ROMEN & 30 & +0.086 & +0.079 & +0.147 & +0.104 \\
+MADQN & 30 & +0.123 & +0.105 & +0.172 & +0.133 \\
+MWCL & 30 & +0.117 & +0.095 & +0.134 & +0.115 \\
+KMedian & 30 & +0.123 & +0.107 & +0.176 & +0.135 \\
+\midrule
+Random-pl. & 30 & +0.120 & +0.098 & +0.171 & +0.130 \\
+  \bottomrule
+  \end{tabular}
+\end{table}

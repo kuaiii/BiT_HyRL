@@ -1,0 +1,16 @@
+\begin{table*}[!ht]
+\centering
+\footnotesize
+\caption{Ablation study isolating bimodal topology construction and Hybrid RL placement under controller induced cascading failures. Each entry is the mean over 30 topologies and both attack modes (40 runs per topology); $\pm$ is the seed-to-seed standard deviation measured within a topology and averaged over the thirty topologies, the same quantity Table~\ref{tab:comprehensive_comparison} reports graph by graph. Higher values indicate better performance.}
+\label{tab:ablation_physical_normalized}
+\begin{tabular*}{\textwidth}{@{}l @{\extracolsep{\fill}} *{3}{c} @{}}
+\toprule
+\textbf{Construction arm} & \textbf{$GCC$} & \textbf{$CSA$} & \textbf{$H_C$} \\
+\midrule
+Original topology + PPO & 0.259$\pm$0.081 & 0.220$\pm$0.065 & 0.381$\pm$0.068 \\
+Original degree sequence, rewired & 0.282$\pm$0.080 & 0.235$\pm$0.064 & 0.395$\pm$0.060 \\
+Near-regular degree sequence ($c=1.0$) & 0.378$\pm$0.012 & 0.319$\pm$0.010 & 0.522$\pm$0.046 \\
+BiT-HyRL ($c=1.6$) & 0.378$\pm$0.015 & 0.319$\pm$0.013 & 0.520$\pm$0.053 \\
+\bottomrule
+\end{tabular*}
+\end{table*}

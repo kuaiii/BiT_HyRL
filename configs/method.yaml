@@ -1,0 +1,24 @@
+method:
+  name: BiT-HyRL
+  topology:
+    max_hub_ratio: 0.25
+    samples: 12
+    score_profile: auto
+    feasibility_schema: finite_size_bimodal_v1
+  controller:
+    framework: PPO
+    policy: GNN
+    default_checkpoint: src/train/v1/checkpoints/bit_hyrl_ppo_agent.pth
+    validation_checkpoints:
+      real_weighted: src/train/v1/checkpoints/bit_hyrl_ppo_realweighted_agent.pth
+    control_refine: attack_aware
+    controller_rate: 0.10
+  metrics:
+    schema_version: bit_hyrl_metrics_v1
+    primary: r_gcc
+    functional:
+      - csa
+      - h_c
+      - h_c_norm
+      - wcp
+      - wcp_norm

@@ -1,0 +1,60 @@
+{
+  "_comment": "BiT-HyRL 全局默认配置（唯一真值源）。JSON 而非 YAML：运行环境无 pyyaml（DESIGN F3）。",
+  "cascade": {
+    "max_iter": 50,
+    "mode": "structural",
+    "reassign_policy": "nearest_with_capacity"
+  },
+  "capacity": {
+    "capacity_explicit": null,
+    "capacity_mode": "formula",
+    "controller_ratio": 0.1,
+    "demand": 1,
+    "n_controllers": null,
+    "theta": 0.5
+  },
+  "topology": {
+    "c": 1.6,
+    "connect_repair_swaps": 20000,
+    "enforce_connected": true,
+    "h": 1,
+    "max_hh_attempts": 64
+  },
+  "metrics": {
+    "alpha": 0.2,
+    "collapse_gcc_threshold": 0.2,
+    "epsilon": 1e-12,
+    "half_window": 0.5
+  },
+  "attack": {
+    "method": "degree",
+    "multistage": false,
+    "params": {},
+    "reinsertion": false,
+    "seed": 0
+  },
+  "train": {
+    "attack_prefix_fraction": 0.3,
+    "clip": 0.2,
+    "entropy_coef": 0.01,
+    "epochs": 4,
+    "episodes_per_iter": 8,
+    "gamma": 1.0,
+    "gcn_layers": 2,
+    "gae_lambda": 0.95,
+    "hidden_dim": 64,
+    "lr": 0.0003,
+    "reward_weights": {
+      "csa": 0.5,
+      "distance": 0.1,
+      "h_load": 0.5,
+      "structure": 1.0
+    },
+    "total_iterations": 200
+  },
+  "transfer": {
+    "checkpoint": null,
+    "per_graph_retrain": false,
+    "source_datasets": []
+  }
+}

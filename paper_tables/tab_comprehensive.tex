@@ -1,0 +1,53 @@
+\begin{table*}[!ht]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{1.5pt}
+\caption{Comprehensive comparison of $GCC$, $CSA$, and $H_C$ across different methods and topologies. The best performance for each topology is in \textbf{bold}, and the second-best is \underline{underlined}. Higher values indicate better performance. All entries are means over the two attack modes and 20 seeds (40 runs per cell); $\pm$ is the sample standard deviation over those runs.}
+\label{tab:comprehensive_comparison}
+\begin{tabular*}{\textwidth}{@{}l @{\extracolsep{\fill}} *{9}{c} @{}}
+\toprule
+\multirow{2}{*}{\textbf{Method}} & \multicolumn{5}{c}{\textbf{Synthetic Networks (BA, growth=3)}} & \multicolumn{4}{c}{\textbf{Real-world Networks}} \\
+\cmidrule(lr){2-6} \cmidrule(l){7-10}
+& \textbf{BA-100} & \textbf{BA-200} & \textbf{BA-300} & \textbf{BA-400} & \textbf{BA-500} & \textbf{GtsCe} & \textbf{UsCarrier} & \textbf{Colt} & \textbf{Cogentco} \\
+\midrule
+\multicolumn{10}{c}{\textbf{GCC Metric}} \\
+\midrule
+Baseline & 0.298$\pm$0.120 & 0.306$\pm$0.123 & 0.311$\pm$0.121 & 0.315$\pm$0.116 & 0.321$\pm$0.115 & 0.131$\pm$0.079 & 0.095$\pm$0.049 & 0.105$\pm$0.069 & 0.128$\pm$0.059 \\
+FRED-ABL & 0.360$\pm$0.054 & 0.374$\pm$0.055 & 0.379$\pm$0.054 & 0.375$\pm$0.055 & 0.376$\pm$0.052 & 0.211$\pm$0.086 & \underline{0.194$\pm$0.090} & \textbf{0.192$\pm$0.096} & 0.194$\pm$0.088 \\
+Eff-R-Net & 0.304$\pm$0.122 & 0.308$\pm$0.121 & 0.311$\pm$0.121 & 0.311$\pm$0.115 & 0.317$\pm$0.116 & 0.199$\pm$0.056 & 0.176$\pm$0.049 & 0.147$\pm$0.081 & 0.197$\pm$0.046 \\
+ONION & 0.311$\pm$0.113 & 0.306$\pm$0.119 & 0.308$\pm$0.121 & 0.312$\pm$0.115 & 0.317$\pm$0.116 & 0.178$\pm$0.073 & 0.155$\pm$0.059 & 0.147$\pm$0.086 & 0.166$\pm$0.063 \\
+QDLM & 0.368$\pm$0.058 & 0.378$\pm$0.050 & 0.377$\pm$0.051 & 0.380$\pm$0.050 & 0.380$\pm$0.050 & \underline{0.221$\pm$0.082} & \textbf{0.204$\pm$0.087} & \underline{0.182$\pm$0.078} & \textbf{0.208$\pm$0.086} \\
+ROMEN & 0.327$\pm$0.099 & 0.327$\pm$0.098 & 0.328$\pm$0.097 & 0.326$\pm$0.101 & 0.328$\pm$0.103 & 0.191$\pm$0.068 & 0.174$\pm$0.054 & 0.148$\pm$0.075 & 0.188$\pm$0.057 \\
+UNITY & \underline{0.394$\pm$0.047} & \underline{0.405$\pm$0.049} & \underline{0.414$\pm$0.032} & \underline{0.413$\pm$0.032} & \underline{0.416$\pm$0.031} & 0.203$\pm$0.059 & 0.163$\pm$0.058 & 0.150$\pm$0.057 & 0.180$\pm$0.059 \\
+\midrule
+\specialrule{0.08em}{0pt}{0pt}
+BiT-HyRL & \textbf{0.446$\pm$0.013} & \textbf{0.452$\pm$0.011} & \textbf{0.456$\pm$0.011} & \textbf{0.458$\pm$0.010} & \textbf{0.458$\pm$0.010} & \textbf{0.238$\pm$0.024} & 0.181$\pm$0.033 & 0.153$\pm$0.037 & \underline{0.199$\pm$0.026} \\
+\midrule
+\multicolumn{10}{c}{\textbf{CSA Metric}} \\
+\midrule
+Baseline & 0.201$\pm$0.068 & 0.249$\pm$0.093 & 0.269$\pm$0.101 & 0.277$\pm$0.100 & 0.284$\pm$0.101 & 0.103$\pm$0.059 & 0.074$\pm$0.032 & 0.080$\pm$0.053 & 0.112$\pm$0.043 \\
+FRED-ABL & 0.209$\pm$0.062 & 0.290$\pm$0.061 & 0.316$\pm$0.059 & 0.328$\pm$0.052 & 0.334$\pm$0.047 & 0.160$\pm$0.071 & \underline{0.150$\pm$0.073} & \textbf{0.146$\pm$0.076} & 0.159$\pm$0.074 \\
+Eff-R-Net & 0.174$\pm$0.102 & 0.239$\pm$0.111 & 0.260$\pm$0.115 & 0.269$\pm$0.107 & 0.280$\pm$0.105 & 0.152$\pm$0.046 & 0.138$\pm$0.040 & 0.111$\pm$0.065 & 0.163$\pm$0.039 \\
+ONION & 0.185$\pm$0.096 & 0.242$\pm$0.105 & 0.261$\pm$0.111 & 0.275$\pm$0.103 & 0.280$\pm$0.105 & 0.138$\pm$0.059 & 0.122$\pm$0.049 & 0.112$\pm$0.070 & 0.140$\pm$0.053 \\
+QDLM & 0.220$\pm$0.063 & 0.290$\pm$0.060 & 0.317$\pm$0.053 & 0.331$\pm$0.048 & 0.337$\pm$0.045 & \underline{0.168$\pm$0.067} & \textbf{0.158$\pm$0.071} & \underline{0.138$\pm$0.062} & \textbf{0.170$\pm$0.073} \\
+ROMEN & 0.200$\pm$0.083 & 0.258$\pm$0.089 & 0.280$\pm$0.088 & 0.286$\pm$0.091 & 0.294$\pm$0.089 & 0.149$\pm$0.054 & 0.140$\pm$0.045 & 0.114$\pm$0.058 & 0.158$\pm$0.046 \\
+UNITY & \underline{0.223$\pm$0.068} & \underline{0.300$\pm$0.067} & \underline{0.332$\pm$0.055} & \underline{0.349$\pm$0.046} & \underline{0.360$\pm$0.040} & 0.157$\pm$0.051 & 0.130$\pm$0.049 & 0.117$\pm$0.046 & 0.152$\pm$0.052 \\
+\midrule
+\specialrule{0.08em}{0pt}{0pt}
+BiT-HyRL & \textbf{0.299$\pm$0.023} & \textbf{0.371$\pm$0.014} & \textbf{0.394$\pm$0.010} & \textbf{0.402$\pm$0.008} & \textbf{0.406$\pm$0.009} & \textbf{0.189$\pm$0.015} & 0.143$\pm$0.022 & 0.121$\pm$0.025 & \textbf{0.170$\pm$0.019} \\
+\midrule
+\multicolumn{10}{c}{\textbf{$H_C$ Metric}} \\
+\midrule
+Baseline & \underline{0.396$\pm$0.052} & 0.417$\pm$0.088 & \underline{0.472$\pm$0.068} & 0.455$\pm$0.095 & \underline{0.480$\pm$0.090} & 0.204$\pm$0.053 & 0.139$\pm$0.043 & 0.171$\pm$0.072 & 0.256$\pm$0.049 \\
+FRED-ABL & 0.337$\pm$0.152 & 0.416$\pm$0.142 & 0.438$\pm$0.149 & 0.452$\pm$0.135 & 0.465$\pm$0.136 & 0.306$\pm$0.123 & 0.290$\pm$0.119 & \textbf{0.274$\pm$0.117} & 0.296$\pm$0.115 \\
+Eff-R-Net & 0.246$\pm$0.180 & 0.307$\pm$0.166 & 0.342$\pm$0.177 & 0.347$\pm$0.175 & 0.360$\pm$0.169 & 0.299$\pm$0.103 & 0.286$\pm$0.100 & 0.254$\pm$0.129 & \underline{0.312$\pm$0.101} \\
+ONION & 0.266$\pm$0.162 & 0.317$\pm$0.152 & 0.344$\pm$0.162 & 0.360$\pm$0.164 & 0.359$\pm$0.170 & 0.300$\pm$0.128 & 0.267$\pm$0.122 & 0.242$\pm$0.138 & 0.289$\pm$0.118 \\
+QDLM & 0.361$\pm$0.160 & 0.408$\pm$0.142 & 0.443$\pm$0.142 & 0.460$\pm$0.136 & 0.472$\pm$0.137 & \underline{0.308$\pm$0.118} & \underline{0.301$\pm$0.114} & \underline{0.268$\pm$0.100} & 0.305$\pm$0.107 \\
+ROMEN & 0.301$\pm$0.136 & 0.343$\pm$0.131 & 0.376$\pm$0.136 & 0.377$\pm$0.155 & 0.384$\pm$0.144 & 0.299$\pm$0.099 & \textbf{0.302$\pm$0.109} & 0.254$\pm$0.112 & 0.311$\pm$0.094 \\
+UNITY & 0.359$\pm$0.178 & \underline{0.421$\pm$0.161} & 0.445$\pm$0.150 & \underline{0.471$\pm$0.150} & 0.477$\pm$0.137 & 0.301$\pm$0.116 & 0.284$\pm$0.118 & 0.264$\pm$0.106 & 0.301$\pm$0.118 \\
+\midrule
+\specialrule{0.08em}{0pt}{0pt}
+BiT-HyRL & \textbf{0.557$\pm$0.114} & \textbf{0.593$\pm$0.077} & \textbf{0.626$\pm$0.065} & \textbf{0.627$\pm$0.056} & \textbf{0.626$\pm$0.049} & \textbf{0.355$\pm$0.045} & 0.262$\pm$0.044 & 0.242$\pm$0.038 & \textbf{0.323$\pm$0.035} \\
+\bottomrule
+\end{tabular*}
+\end{table*}
