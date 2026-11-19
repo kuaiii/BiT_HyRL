@@ -7,12 +7,7 @@ def entropy_diff_time_small(G):
     Ls = np.sort(nx.laplacian_spectrum(G))
     diff_time = Ls[np.where(Ls > 10 ** -12)[0]][0]
     k_ = len(G.edges()) / len(G.nodes())
-    # max_S = np.log(len(G.nodes))/100
-    # N = np.log(len(G.nodes()))
-    # n_ = np.log(len(G.nodes))
     beta = -np.log(.9) / diff_time
-    # beta = -np.log(10/(len(G.edges())/len(G.nodes())))/diff_time
-    # beta = (diff_time + k_)/2
     print('beta = ', beta)
     sp = np.exp(-beta * Ls)
     # sp = np.delete(sp,np.where(sp<10**-10))
@@ -27,12 +22,7 @@ def entropy_diff_time_mid(G):
     Ls = np.sort(nx.laplacian_spectrum(G))
     diff_time = Ls[np.where(Ls > 10 ** -12)[0]][0]
     k_ = len(G.edges()) / len(G.nodes())
-    # max_S = np.log(len(G.nodes))/100
-    # N = np.log(len(G.nodes()))
-    # n_ = np.log(len(G.nodes))
     beta = -np.log(.33) / diff_time
-    # beta = -np.log(10/(len(G.edges())/len(G.nodes())))/diff_time
-    # beta = (diff_time + k_)/2
     print('beta = ', beta)
     sp = np.exp(-beta * Ls)
     # sp = np.delete(sp,np.where(sp<10**-10))
@@ -81,9 +71,6 @@ def entanglement_small(G):
         S_2 = entropy(G_i, beta)
         G_star = nx.star_graph(k + 1)
         S_star = entropy(G_star, beta)
-        # S_star=0
-        # Z_star = 1 + (k+1-2)*np.exp(-beta)
-        # S_star = beta*(k+1-2)*np.exp(-beta)/Z_star + np.log2(Z_star)
 
         S_2 = S_2 + S_star
         ent[nodes[i]] = S_2 - S_1
@@ -103,9 +90,6 @@ def entanglement_mid(G):
         S_2 = entropy(G_i, beta)
         G_star = nx.star_graph(k + 1)
         S_star = entropy(G_star, beta)
-        # S_star=0
-        # Z_star = 1 + (k+1-2)*np.exp(-beta)
-        # S_star = beta*(k+1-2)*np.exp(-beta)/Z_star + np.log2(Z_star)
 
         S_2 = S_2 + S_star
         ent[nodes[i]] = S_2 - S_1
@@ -124,9 +108,6 @@ def entanglement_large(G):
         S_2 = entropy(G_i, beta)
         G_star = nx.star_graph(k + 1)
         S_star = entropy(G_star, beta)
-        # S_star=0
-        # Z_star = 1 + (k+1-2)*np.exp(-beta)
-        # S_star = beta*(k+1-2)*np.exp(-beta)/Z_star + np.log2(Z_star)
 
         S_2 = S_2 + S_star
         ent[nodes[i]] = S_2 - S_1

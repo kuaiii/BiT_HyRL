@@ -1,20 +1,4 @@
-"""Controller-budget sensitivity: does the gain survive at 5 % or 20 % deployment?
-
-Every result uses ``n_c = round(0.1 N)``.  A reviewer will ask whether the advantage is an
-artefact of that particular budget -- a smaller control plane stresses the topology harder
-(fewer controllers to keep components alive), a larger one makes the control plane easier.
-
-The budget enters twice: the placement policy is asked for ``n_c`` controllers, and the
-capacity model solves ``C = ceil((1+theta) N / n_c)``.  Both are varied together here, which
-is what "deploying 5 % instead of 10 %" means operationally.
-
-Reported per graph: the gain over the un-reconstructed original at each budget.  The claim
-survives if the sign is stable across budgets, not if one budget is best.
-
-Usage:
-    python scripts/controller_budget_sensitivity.py
-    python scripts/controller_budget_sensitivity.py --ratios 0.05,0.1,0.2
-"""
+"""Controller-budget sensitivity: does the gain survive at 5 %, 10 % and 20 %?"""
 
 from __future__ import annotations
 
@@ -43,9 +27,6 @@ from bit_hyrl.evaluation.runner import provisional_attack_sequence  # noqa: E402
 from bit_hyrl.io.graph_io import load_graph_spec  # noqa: E402
 from bit_hyrl.rl.transfer import load_policy  # noqa: E402
 
-#: single results root: every builder reads ``results``, so a re-run must land there
-#: too.  The file keeps the name the table builder expects (``budget_all.csv``) rather
-#: than the historical ``controller_budget.csv`` in the earlier archive.
 OUT = REPO_ROOT / "results" / "budget" / "budget_all.csv"
 
 
@@ -63,7 +44,7 @@ def evaluate(graph, controllers, n_c: int, ratio: float, attack: str, seed: int)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="控制器预算比例敏感性")
+    parser = argparse.ArgumentParser(description="sensitivity to the controller budget")
     parser.add_argument("--ratios", default="0.05,0.1,0.2")
     parser.add_argument("--eval-seeds", type=int, default=3)
     parser.add_argument("--c", default="1.6",

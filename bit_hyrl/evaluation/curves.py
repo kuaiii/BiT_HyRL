@@ -1,24 +1,4 @@
-"""Per-step robustness decomposition — the ``R_res`` upgrade to the metrics layer.
-
-The earlier runner collapsed a run to a single ``auc_r`` (pure GCC) plus final-state
-CSA / H_C.  A careful re-reading of the metric definitions showed
-that the headline ``R_res`` was inflated and flattened because the **self-normalised**
-control entropy (``H_C / ln(alive controllers)``) sat near ``1`` and contributed a
-~0.26 constant floor.  This module fixes the accounting by:
-
-* reporting the **three [0, 1] curves separately** — GCC(f), CSA(f), H_C(f) — and
-  ``r_res`` as the *mean of the three trapezoidal AUCs* (a curve-area statement, not
-  a survival fraction; ``r_res > 0.5`` does **not** mean "50 % survives");
-* normalising H_C by the **fixed** ``ln(n_controllers^0)`` (initial count), so a
-  concentrated control plane scores low instead of pinned near 1;
-* a **collapse** sub-metric ``collapse_f_gcc02`` — the first ``f`` at which GCC drops
-  below ``0.2`` (``1.0`` if it never does) — which cannot be inflated by H_C;
-* a **half-window** ``r_res_half`` over ``f <= 0.5`` (AUC × 2, mean of the three),
-  where the topology/placement differences actually live.
-
-CSA uses the denominator fixed at ``N`` (:func:`~bit_hyrl.evaluation.metrics.calculate_csa`
-``initial_num_switches=N``), per conflicts #17/#30 — never the surviving count.
-"""
+"""Per-step robustness decomposition and the ``R_res`` integral."""
 
 from __future__ import annotations
 
@@ -76,20 +56,7 @@ def compute_robustness(
     n_nodes: int,
     n_controllers_initial: int,
 ) -> dict:
-    """Compute per-step GCC/CSA/H_C curves, three AUCs, ``r_res`` and sub-metrics.
-
-    Args:
-        graph: The evaluated graph (full, before any removal).
-        trace: The :class:`~bit_hyrl.control.cascade.CascadeTrace`.
-        n_nodes: ``N`` (CSA denominator, fixed).
-        n_controllers_initial: Initial controller count (H_C normaliser, fixed).
-
-    Returns:
-        A dict with ``gcc_curve`` / ``csa_curve`` / ``hc_curve`` (per step, ``[0,1]``),
-        ``hc_norm_curve`` (legacy self-normalised, for reference), ``auc_gcc`` /
-        ``auc_csa`` / ``auc_hc``, ``r_res``, ``collapse_f_gcc02``, ``r_res_half``
-        and the three half-window AUCs.
-    """
+    """Compute per-step GCC/CSA/H_C curves, three AUCs, ``r_res`` and sub-metrics."""
     f_grid = list(trace.f_grid)
     gcc_curve = list(trace.r_curve)
 
@@ -100,18 +67,10 @@ def compute_robustness(
         csa_curve.append(
             calculate_csa(subgraph, list(step.controllers_alive), initial_num_switches=n_nodes)
         )
-        # Control-capacity retention H_C / ln(n_c^0): fixed denominator (NOT ln(surviving)),
-        # single controller -> 0.  Same definition as the runner's ``h_c_norm_final``.
         hc_curve.append(
             calculate_h_c_norm(step.loads, n_c0=n_controllers_initial)
         )
 
-    # The retention curve is reported as its running minimum.  Removing a heavily
-    # loaded controller redistributes demand onto the survivors, so the raw entropy
-    # can rise in the middle of an attack; a metric that improves while the network
-    # is being dismantled is not a retention curve.  Taking the cumulative minimum
-    # here -- rather than in post-processing -- keeps every experiment, and every
-    # table, on the definition stated in the metrics table of the paper.
     hc_curve = list(np.minimum.accumulate(np.asarray(hc_curve, dtype=float)))
 
     auc_gcc = trapezoidal(f_grid, gcc_curve)

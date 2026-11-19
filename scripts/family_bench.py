@@ -1,42 +1,4 @@
-"""Substrate-construction benchmark, second generation: seeds, all thirty graphs.
-
-What this measures
-------------------
-For every ``(graph, construction, seed)`` the construction is realised at that
-graph's own ``(N, M)`` and then attacked with no controller deployed.  Four curve
-areas are reported, defined identically (Eq. ``eq:robustness_metric1``):
-
-    R_GCC^{tar}, R_GCC^{ran}   -- GCC area / N under degree-ordered and random removal
-    R_E^{tar},   R_E^{ran}     -- E_glob area under the same two orders
-
-``A`` is their mean (Eq. ``eq:A_four``).  ``kappa`` and ``E_glob`` are the
-structural covariates.  Wall clock is the construction alone, single core.
-
-Why a new script
-----------------
-The first-generation run used one construction seed and 21 grid points for the
-efficiency integral but 101 for the GCC integral, so ``A`` mixed two integration
-grids.  Here both integrals use the *same* 41-point trapezoid on
-``f in [0, 1]``, and every cell is repeated over ``--seeds`` construction seeds.
-The seed also drives the random removal permutation, so the seed-to-seed spread
-reported by the tables contains both sources of noise.
-
-Sharding
---------
-One CSV per ``(dataset, seed)`` so that a run can be split across machines and
-resumed after an interruption::
-
-    results/family/shards/BA-100__s3.csv
-
-A shard is skipped when it already holds a row for every requested method.
-
-Usage
------
-::
-
-    python scripts/family_bench.py --datasets BA-100 --seeds 0 --methods all
-    python scripts/family_bench.py --datasets all --seeds 0,1,2,3,4 --workers 6
-"""
+"""Substrate-construction benchmark on all thirty graphs, several seeds."""
 
 from __future__ import annotations
 
@@ -70,8 +32,6 @@ METHODS = ("Original", "Random", "BA", "WS",
            "BiT-R", "BiT-HyRL", "BiT-E",
            "UNITY", "FRED-ABL", "QDLM", "Eff-R-Net", "ONION", "ROMEN")
 
-#: row label -> constructor name understood by ``build_method_graph`` (``None`` = keep
-#: the input graph, ``"bit"`` = the bimodal plan, otherwise a registry baseline)
 CONSTRUCT = {
     "Original": None,
     "Random": "random_sameNM",
@@ -100,9 +60,6 @@ def family(name: str) -> str:
     return prefix if prefix in ("BA", "ER", "WS", "AS") else "ISP"
 
 
-# --------------------------------------------------------------------------- #
-# same-budget synthetic controls
-# --------------------------------------------------------------------------- #
 def _adjust_edges(graph: nx.Graph, target_m: int, seed: int) -> nx.Graph:
     """Add or drop edges until the graph has exactly ``target_m``, staying connected."""
     rng = np.random.default_rng(seed)
@@ -143,24 +100,8 @@ def _random_same_nm(n: int, m_edge: int, seed: int) -> nx.Graph:
     return random_connected_graph(n, m_edge, seed=seed)
 
 
-# --------------------------------------------------------------------------- #
-# bimodal interval (four constraints of Section 3) -- defined in
-# ``bit_hyrl.topology.interval`` so that every script shares one rule
-# --------------------------------------------------------------------------- #
-
-
-# --------------------------------------------------------------------------- #
-# metrics
-# --------------------------------------------------------------------------- #
 def efficiency(graph: nx.Graph) -> float:
-    """Global efficiency ``1/[N(N-1)] sum 1/d_ij`` (unreachable pairs contribute 0).
-
-    Computed with a C-level all-pairs BFS (``scipy``) rather than
-    ``networkx.all_pairs_shortest_path_length``: the integrals need this quantity at
-    forty-one removal fractions for every cell, and the Python-level BFS made the
-    largest AS snapshot cost minutes per curve.  The two agree exactly; the sparse
-    matrix is the same graph.
-    """
+    """Global efficiency ``1/[N(N-1)] sum 1/d_ij`` (unreachable pairs contribute 0)."""
     n = graph.number_of_nodes()
     if n < 2:
         return 0.0
@@ -216,7 +157,6 @@ def random_order(graph: nx.Graph, seed: int) -> list[int]:
     return [int(v) for v in rng.permutation(nodes)]
 
 
-# --------------------------------------------------------------------------- #
 def run_method(spec: dict[str, Any], method: str, seed: int) -> dict[str, Any]:
     dataset = spec["dataset"]
     original, _meta = load_graph_spec(spec)
@@ -321,7 +261,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                     print(f"       {name:<10} A={rows[-1].get('A', '--')} "
                           f"t={rows[-1].get('construct_s', '--')}", flush=True)
 
-            # rewrite the shard so the file is always a complete, ordered table
             existing: list[dict[str, Any]] = []
             if path.exists() and not args.force:
                 with path.open(encoding="utf-8") as handle:

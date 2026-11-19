@@ -1,16 +1,4 @@
-"""PPO trainer for controller placement (T10).
-
-A placement *episode* is a sequential, without-replacement pick of ``n_c``
-controllers on one graph.  The episode's terminal reward is
-:func:`bit_hyrl.rl.reward.placement_reward`; with ``gamma = 1`` the return of
-every step is that terminal reward, so the clipped PPO surrogate assigns credit to
-the whole selection sequence.
-
-Determinism: the torch RNG is seeded once from a
-``SeedSequence``-derived integer (:func:`bit_hyrl.rng.derive_int`), the rollout
-sampler draws from a per-episode :func:`bit_hyrl.rng.derive` stream, and the
-betweenness feature uses its own derived seed.  No process-global RNG is touched.
-"""
+"""PPO trainer for controller placement."""
 
 from __future__ import annotations
 
@@ -43,35 +31,15 @@ GraphLike = Any
 
 
 def _train_order(seed: int, n_graphs: int) -> list[int]:
-    """Seed-derived permutation of the training graphs (sampling order for episodes).
-
-    The splits file lists graphs in **path order**, which clusters them by family and
-    by size: ``dataset/all/real/*`` first, then ``syn/RG_n20*`` ... ``syn/WSlow_n800*``.
-    Walking that list cyclically with a 200-iteration x 6-episode budget (1200 draws
-    out of 2000 graphs) never reached the large synthetic graphs at the tail at all,
-    so the policy was transferred zero-shot to N=1000 test graphs while having seen
-    only ``n<=800``-ish names sorted early — a silent train/test scale mismatch.
-
-    A deterministic permutation fixes the bias while keeping ``seed`` reproducibility:
-    the same seed still yields the exact same sequence of graphs, just spread across
-    families and scales instead of grouped by filename.
-    """
+    """Seed-derived permutation of the training graphs (sampling order for episodes)."""
     if n_graphs <= 1:
         return list(range(n_graphs))
     generator = _rng.derive(seed, "ppo", "train_order")
     return [int(index) for index in generator.permutation(n_graphs)]
 
 
-
 def _init_with_generator(model: torch.nn.Module, generator: torch.Generator) -> None:
-    """Re-initialise every RNG-dependent parameter from a **local** generator.
-
-    This is the "torch seed set from a SeedSequence-derived value" requirement
-    without touching process-global torch state: a fresh :class:`torch.Generator`
-    is seeded with the derived integer and every ``Linear`` / ``LayerNorm`` is
-    re-drawn from it.  Raw parameters (the GAT attention vectors) start at zero and
-    are already deterministic.
-    """
+    """Re-initialise every RNG-dependent parameter from a **local** generator."""
     for module in model.modules():
         if isinstance(module, torch.nn.Linear):
             bound = 1.0 / math.sqrt(max(1, module.in_features))
@@ -105,11 +73,7 @@ def build_model(
     seed: int = 0,
     device: str = "cpu",
 ) -> ActorCritic:
-    """Build a :class:`ActorCritic` deterministically seeded from ``seed``.
-
-    A local :class:`torch.Generator` is seeded with a SeedSequence-derived integer
-    and used to (re)initialise the parameters — no process-global torch seeding.
-    """
+    """Build a :class:`ActorCritic` deterministically seeded from ``seed``."""
     generator = torch.Generator(device="cpu")
     generator.manual_seed(
         int(_rng.derive_int(seed, "ppo", "torch", low=0, high=2**31 - 1))
@@ -194,13 +158,7 @@ def _ppo_update(
     grad_clip: float = 0.5,
     minibatch: int = 32,
 ) -> None:
-    """Run ``cfg.epochs`` PPO epochs, **minibatched** over the collected episodes.
-
-    ``minibatch`` groups episodes into gradient steps (the paper's ``minibatch =
-    32``).  With ``episodes_per_iter = 8 < 32`` this is a single full-batch step per
-    epoch, which is the paper's configuration.  ``value_coef`` and ``grad_clip`` are
-    the paper's Table-4 values (0.5 / 0.5).
-    """
+    """Run ``cfg.epochs`` PPO epochs, **minibatched** over the collected episodes."""
     if not episodes:
         return
     batch_size = minibatch if minibatch and minibatch > 0 else len(episodes)
@@ -307,36 +265,12 @@ def train(
     grad_clip: float = 0.5,
     minibatch: int = 32,
 ) -> dict[str, Any]:
-    """Train a PPO placement policy and (optionally) persist a checkpoint.
-
-    Args:
-        train_graphs: Specs / paths / ``nx.Graph`` objects to train on.
-        cfg: :class:`TrainConfig` hyper-parameters.
-        out_path: Checkpoint destination; ``None`` trains without saving.
-        seed: Root seed (torch + sampling + features all derived from it).
-        verbose: Print mean reward per outer iteration.
-        include_betweenness: Feature-extractor switch recorded in the checkpoint.
-        betweenness_k: Betweenness sample budget recorded in the checkpoint.
-        heads: Attention heads per GAT layer.
-        device: Torch device.
-        val_graphs: Optional validation graphs.  When given, each iteration also
-            evaluates the policy greedily on a fixed val subset and records the
-            mean reward; ``patience > 0`` early-stops after that many iterations
-            without val improvement.
-        patience: Early-stop patience (iterations without val improvement); ``0``
-            disables early stopping.
-        eval_sample: Size of the fixed val subset used for the val reward.
-        value_coef / grad_clip / minibatch: Paper Table-4 PPO knobs.
-
-    Returns:
-        The checkpoint dict (``state_dict``, ``cfg``, feature schema, history).
-    """
+    """Train a PPO placement policy and (optionally) persist a checkpoint."""
     graphs = resolve_graphs(train_graphs)
     if not graphs:
-        raise ValueError("train 需要至少一张图")
+        raise ValueError("train needs at least one graph")
     in_dim = feature_dim(include_betweenness)
 
-    # Fixed val subset (sampled once so the val curve is comparable across iters).
     val_subset: list[nx.Graph] = []
     if val_graphs:
         val_all = resolve_graphs(val_graphs)
@@ -406,7 +340,7 @@ def train(
                 )
             if patience and since_best >= patience:
                 if verbose:
-                    LOGGER.info("早停：val 连续 %d 迭代无提升（停于 iter %d）", patience, stopped_at)
+                    LOGGER.info("early stop: val did not improve for %d iterations (stopped at iter %d)", patience, stopped_at)
                 break
         elif verbose:
             LOGGER.info(
@@ -448,6 +382,6 @@ def train(
         target.parent.mkdir(parents=True, exist_ok=True)
         torch.save(checkpoint, target)
         if verbose:
-            LOGGER.info("checkpoint 已保存: %s（耗时 %.2fs）", target, elapsed)
+            LOGGER.info("checkpoint saved: %s (%.2fs)", target, elapsed)
 
     return checkpoint

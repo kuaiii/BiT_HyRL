@@ -1,22 +1,4 @@
-"""Family table and paired statistics for the deployment experiment (second generation).
-
-The substrate rows of the manuscript's comparison come straight from the archive; the
-three bimodal rows are rebuilt here from ``results/family/ctrl``, where every cell is
-a cascade evaluation with the PPO placement at the per-graph ``c`` of Section 3 and
-twenty campaign seeds per attack.
-
-Outputs (under ``results/family`` and ``paper_tables``):
-
-``family_ctrl.csv``      the table body as tidy data, one row per strategy
-``tab_family_comparison.tex``   LaTeX body, best/second bolded among ranked rows
-``tab_paired_vs_bit.tex``       Holm-corrected paired tests against the deployed row
-
-Usage
------
-::
-
-    python scripts/family_ctrl_report.py
-"""
+"""Family table and paired statistics for the deployment experiment."""
 
 from __future__ import annotations
 
@@ -39,10 +21,6 @@ OUT = REPO_ROOT / "results" / "family"
 TABLES = REPO_ROOT / "paper_tables"
 
 FAMILIES = ("BA", "ER", "WS", "ISP", "AS")
-#: policy name in the data -> row label.  The deployed method is BiT-HyRL (the system's
-#: geometric midpoint of the admissible interval, built by the bimodal network); the
-#: legacy tag "BiT-A" is accepted as an alias so that older shards keep loading.  The
-#: two endpoint points of the admissible interval are kept as optional reference rows.
 RENAME = {"BiT-HyRL": r"BiT-HyRL", "BiT-A": r"BiT-HyRL",
           "BiT-R": "BiT-R", "BiT-E": "BiT-E",
           "MWCL-sim": "MWCL", "MADQN-sim": "MADQN",
@@ -50,9 +28,6 @@ RENAME = {"BiT-HyRL": r"BiT-HyRL", "BiT-A": r"BiT-HyRL",
 ORDER = (r"BiT-HyRL", "BiT-R", "BiT-E", "BiT-c1.0", "BiT-degOnly", "BiT-norecon",
          "UNITY", "QDLM", "FRED-ABL", "Eff-R-Net", "ONION", "ROMEN",
          "MWCL", "MADQN", "KMedian", "Random-pl.")
-#: rows that are controls rather than competitors: the other two points of the same
-#: admissible interval, the fixed-c arm and the two ablations.  They are printed but
-#: never ranked, so a bold cell always means "best among the deployed methods".
 ABLATION = {"BiT-R", "BiT-E", "BiT-c1.0", "BiT-degOnly", "BiT-norecon"}
 METRICS = (("$GCC$", "auc_gcc"), ("$CSA$", "auc_csa"), ("$H_C$", "auc_hc"),
            ("$R_{\\mathrm{res}}$", "r_res"))
@@ -68,17 +43,12 @@ def load() -> pd.DataFrame:
     archive["label"] = archive["policy"].map(lambda name: RENAME.get(name, name))
     archive["source"] = "archive"
     pieces = [archive]
-    # the bimodal arms live in ``ctrl``; the ROMEN completion shards, once they land,
-    # live in ``ctrl_romen`` and are merged the same way
     paths = sorted(glob.glob(str(CTRL / "*.csv"))) + sorted(
         glob.glob(str(CTRL.parent / "ctrl_romen" / "*.csv")))
     if paths:
         fresh = pd.concat([pd.read_csv(path) for path in paths], ignore_index=True)
         fresh["label"] = fresh["policy"].map(lambda name: RENAME.get(name, name))
         fresh["source"] = "rerun"
-        # a re-run row supersedes the archived row of the same strategy
-        # ROMEN is decided as a whole row further down: a partly finished completion
-        # sweep must not displace the archived row it is meant to extend
         fresh_labels = set(fresh["label"]) - {"ROMEN"}
         pieces = [archive[~archive["label"].isin(fresh_labels)], fresh]
     frame = pd.concat(pieces, ignore_index=True)
@@ -87,19 +57,7 @@ def load() -> pd.DataFrame:
 
 
 def _merge_romen(frame: pd.DataFrame) -> pd.DataFrame:
-    """Complete the ROMEN row graph by graph.
-
-    The archived row covers seventeen topologies; the completion sweep covers the nine
-    that were missing, and the two sets are disjoint.  The right operation is therefore
-    a union on ``dataset``, with a fresh cell replacing an archived one wherever both
-    exist.  Dropping the archived row (as an all-or-nothing rule would) throws away
-    seventeen graphs; keeping both would double-count the overlaps.
-
-    The mixed row is not ideal statistically---ROMEN's optimiser does not reproduce bit
-    for bit across processes, so the two halves are separate draws---but every cell is
-    the same protocol (twenty seeds, MADQN placement), and the alternative is a row that
-    silently reports seventeen graphs when twenty-six are available.
-    """
+    """Complete the ROMEN row graph by graph."""
     romen = frame[frame["label"] == "ROMEN"]
     if romen.empty:
         return frame
@@ -179,14 +137,7 @@ def tex_body(frame: pd.DataFrame) -> str:
 
 
 def paired(frame: pd.DataFrame) -> pd.DataFrame:
-    """Exact paired signed-rank tests against the deployed row, Holm over the four metrics.
-
-    Each row also carries the two-sided 95% confidence interval of the mean paired
-    difference, built as a Student-$t$ interval on the per-topology differences
-    (``n - 1`` degrees of freedom).  The interval is the quantity a reader needs in
-    order to see that a reported margin is not an artefact of the spread, and it is
-    reported alongside the test rather than instead of it.
-    """
+    """Exact paired signed-rank tests against the deployed row, Holm over the four metrics."""
     per_graph = (frame.groupby(["label", "dataset"])[["r_res", "auc_gcc", "auc_csa", "auc_hc"]]
                  .mean().reset_index())
     reference = per_graph[per_graph["label"] == r"BiT-HyRL"].set_index("dataset")

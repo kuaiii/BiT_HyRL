@@ -97,23 +97,14 @@ def _finder_nd(network: Graph, reinsertion=True, strategy_id=0,
 
     print("Getting solution")
     solution, solution_time = dqn.EvaluateRealData(g=nx_graph,
-                                                   # model_file=model_file,
-                                                   # data_test=data_test,
-                                                   # save_dir=save_dir,
                                                    stepRatio=step_ratio,
                                                    )
 
-    # GetSolution END
-    # print("Done getting solution")
     if reinsertion is True:
         print("Reinserting nodes")
         # EvaluateSolution BEGIN
         t1 = time.time()
-        # strategyID: 0:no insert; 1:count; 2:rank; 3:multiply
-        # This function returns the solution after the reinsertion steps
         reinsert_solution, Robustness, MaxCCList = dqn.EvaluateSol(g=nx_graph,
-                                                                   # data_test=data_test,
-                                                                   # sol_file=solution,
                                                                    solution=solution,
                                                                    strategyID=strategy_id,
                                                                    reInsertStep=reinsert_step,
@@ -130,8 +121,6 @@ def _finder_nd(network: Graph, reinsertion=True, strategy_id=0,
     output = np.zeros(network.num_vertices())
 
     for n, p in zip(solution, list(reversed(range(1, len(solution))))):
-        # output[static_id[f"n{n}"]] = p
-        # assert static_id[n] == n, f"static_id[n] = {static_id[n]} != n = {n}"
         output[static_id[n]] = p
 
     # print("Done ordering nodes")

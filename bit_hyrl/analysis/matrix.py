@@ -81,23 +81,7 @@ def run_matrix(
     realize: str = "hh+rewire",
     policy_selector: Any = None,
 ) -> pd.DataFrame:
-    """Run the full matrix and return a long-table ``DataFrame``.
-
-    Args:
-        specs: ``graphs.json``-style specs.
-        policies: Placement policies to sweep.
-        topologies: ``original`` / ``bit``.
-        attacks: Attack methods.
-        modes: Cascade modes.
-        seeds: Seeds (the BiT graph depends on the seed).
-        checkpoint: PPO checkpoint path (when ``policy_selector`` is None and PPO
-            is requested).
-        c / h / realize: BiT reconstruction knobs.
-        policy_selector: Optional pre-loaded :class:`PPOPolicy` (tests / reuse).
-
-    Returns:
-        A ``DataFrame`` with :data:`MATRIX_COLUMNS`.
-    """
+    """Run the full matrix and return a long-table ``DataFrame``."""
     need_ppo = "ppo" in policies
     policy_obj = None
     if need_ppo:
@@ -106,7 +90,7 @@ def run_matrix(
         elif checkpoint is not None:
             policy_obj = load_policy(checkpoint)
         else:
-            raise ValueError("run_matrix 请求 ppo 策略，需要 checkpoint 或 policy_selector")
+            raise ValueError("run_matrix was asked for the ppo policy, which needs a checkpoint or a policy_selector")
 
     rows: list[dict[str, Any]] = []
     for spec in specs:

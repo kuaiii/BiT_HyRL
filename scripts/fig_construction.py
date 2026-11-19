@@ -1,32 +1,4 @@
-"""The substrate-construction figure, redrawn in the layout of the old Fig. 4.
-
-Two files come out of here:
-
-``construction_overview.pdf``  (Fig. 5)
-    Four panels.  (a) and (b) are the GCC curves of the eight drawn constructions on
-    ``BA-100`` under degree-ordered and uniform removal, averaged over the five construction
-    seeds;
-    (c) is the distribution of the four-area mean ``A`` over the thirty substrates; (d)
-    splits that mean into its two attack modes, so the two bars average to the number
-    printed above them.  Colour is the method throughout, so a curve in (a) and a box in
-    (c) are the same construction.
-
-``construction_mechanism.pdf``  (Fig. 6)
-    Two panels, both on the thirty substrates: ``A`` against the second-moment ratio
-    ``kappa`` and against the construction wall clock.  These are the two panels that used
-    to sit under the family bars; they carry the mechanism claim and the cost claim, which
-    is why they are separated from the ranking figure.
-
-Every number is read from files the benchmark already wrote: ``curves_BA-100.csv``
-(``export_construction_curves.py``), ``family_bench.csv`` and ``agg_method.csv``.  Nothing
-is recomputed here, so the figures cannot drift away from the tables.
-
-Usage
------
-::
-
-    python scripts/fig_construction.py --out ../03-第三次投稿\\ RESS/manuscript
-"""
+"""Draw the substrate-construction figure."""
 
 from __future__ import annotations
 
@@ -43,12 +15,8 @@ import pandas as pd
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA = REPO_ROOT / "results" / "family"
 
-#: ``np.trapz`` was renamed to ``np.trapezoid`` in NumPy 2.  Resolving it once here keeps
-#: ``getattr(np, "trapezoid", np.trapz)`` from evaluating the removed name as its default.
 _TRAPEZOID = getattr(np, "trapezoid", None) or getattr(np, "trapz")
 
-#: manuscript label -> (colour, drawn label).  The teal of ``BiT-HyRL`` is the one used in
-#: the other figures; the four reference rows stay grey/brown so they read as controls.
 STYLE = {
     "BiT-HyRL": ("#16BCCD", "BiT-HyRL"),
     "Random": ("#9e9e9e", "Random"),
@@ -62,20 +30,10 @@ STYLE = {
     "BA": ("#c49a6c", "BA"),
     "Original": ("#4d4d4d", "Original"),
 }
-#: The reference rows of Table 7 are constructions, not competitors; they are drawn dashed
-#: so that the legend of (a)--(b) separates them from the five methods.
 REFERENCE = {"WS", "BA", "Original"}
-#: What the figure draws.  ``Random (ER)`` stays in Table 7 as the stochastic control but is
-#: not drawn: it is one more reference construction and it cluttered the ranking panels
-#: without changing their order.
 METHODS = ("BiT-HyRL", "UNITY", "WS", "QDLM", "FRED-ABL",
            "ROMEN", "BA", "Original")
 
-#: Sequential ramp of panel (e), in the accent hue of the figure rather than the default
-#: ``Blues``: the same cyan family as ``#16BCCD``, passed through ``#5BCFDB`` in the middle.
-#: Positions are chosen so that no integer rank lands near the luminance at which the cell
-#: label has to flip from white to ink, and so that lightness increases monotonically--the
-#: strip therefore still decodes in greyscale.  ``rank 1`` is the dark end.
 RANK_RAMP = ((0.00, "#0A3B42"), (0.14, "#0C4E57"), (0.28, "#116672"),
              (0.40, "#3AA9B7"), (0.62, "#5BCFDB"), (0.82, "#93DEE7"),
              (1.00, "#D9EFF3"))
@@ -120,8 +78,6 @@ plt.rcParams.update({
 
 #: Bold math in Times-like glyphs, as in the other figures.
 MATH_STYLE = {"mathtext.default": "bfit", "mathtext.fontset": "stix"}
-#: Subplot box and row/column gaps of the four-panel block, shared with the old Fig. 4 so
-#: the two figures stand at the same height in the text.
 MARGINS = {"left": 0.075, "right": 0.992, "bottom": 0.085, "top": 0.972}
 BASE_HEIGHT_IN, PANEL_SHRINK_MM = 4.85, 6.0
 HSPACE, WSPACE = 0.33, 0.16
@@ -150,12 +106,7 @@ def load(dataset: str):
 
 
 def _aligned_labels(names, values, size=6.4):
-    """``name 0.469`` for every entry, with the numbers in one straight column.
-
-    The legend has no second column of its own, so the gap is padded with ordinary spaces
-    measured against the widest name; padding on the inside of the string is what survives
-    the legend's own width calculation, trailing spaces are not.
-    """
+    """``name 0.469`` for every entry, with the numbers in one straight column."""
     from matplotlib.font_manager import FontProperties
     from matplotlib.textpath import TextPath
     prop = FontProperties(family="serif", weight="bold", size=size)
@@ -181,12 +132,6 @@ def panel_curves(axis, curves: pd.DataFrame, dataset: str, attack: str, title: s
         grid = np.sort(subset["f"].unique())
         values = (subset.pivot_table(index="seed", columns="f", values="gcc")
                   .to_numpy().mean(axis=0))
-        # The number printed beside each entry is the area under the curve that is drawn,
-        # i.e. GCC integrated over f for this substrate under this mode -- the same object
-        # as R_GCC in Table 7, and one the reader can check against the line itself.  It is
-        # deliberately *not* the thirty-substrate A of (c): a score of a different scope
-        # printed next to a single substrate's curve is what made the old figure invite
-        # 0.428-against-0.271 comparisons.
         series.append((method, grid, values, float(_TRAPEZOID(values, grid))))
 
     labels = _aligned_labels([STYLE[method][1] for method, _, _, _ in series],
@@ -209,14 +154,7 @@ def panel_curves(axis, curves: pd.DataFrame, dataset: str, attack: str, title: s
 
 
 def panel_orders(axis, orders: pd.DataFrame, ranking: list[str]) -> None:
-    """Ranking strip: one row per attack ordering, one column per construction.
-
-    The six orderings are not four variants of one idea: ``degree``, ``betweenness``,
-    ``closeness``, ``coreness`` and ``eigenvector`` all attack by centrality, whereas
-    ``random`` is a uniform failure.  Drawing them together is what makes the two
-    non-first cells of ``BiT-HyRL`` legible instead of hidden, and it is also what stops a
-    reader from accusing the panel of cherry-picking the favourable orderings.
-    """
+    """Ranking strip: one row per attack ordering, one column per construction."""
     rank = (orders.pivot(index="order", columns="method", values="rank_mean")
             .reindex(list(ORDER_ROWS))[ranking])
     values = rank.to_numpy(dtype=float)
@@ -242,8 +180,6 @@ def panel_orders(axis, orders: pd.DataFrame, ranking: list[str]) -> None:
     axis.set_yticklabels(list(ORDER_LABELS))
     axis.set_xticks(np.arange(-0.5, len(ranking), 1), minor=True)
     axis.set_yticks(np.arange(-0.5, len(ORDER_ROWS), 1), minor=True)
-    # Grey rather than white: the pale end of the ramp is nearly paper white, and white
-    # separators would dissolve into it.
     axis.grid(which="minor", color="0.72", lw=0.9)
     axis.tick_params(which="minor", length=0)
     for spine in axis.spines.values():
@@ -251,9 +187,6 @@ def panel_orders(axis, orders: pd.DataFrame, ranking: list[str]) -> None:
         spine.set_linewidth(0.6)
         spine.set_color("0.35")
 
-    # The column of the proposed construction is boxed so that the eye lands on it first.
-    # A single stroke cannot work on a teal ramp--the accent colour of the method would
-    # disappear into the cells--so the box is drawn dark on a white halo.
     from matplotlib.patches import Rectangle
     try:
         column = ranking.index("BiT-HyRL")
@@ -278,9 +211,6 @@ def build_overview(curves, bench, means, orders, out: Path) -> None:
         ranking.sort(key=lambda name: -mean_a[name])
 
         figure = plt.figure(figsize=(7.0, OVERVIEW_HEIGHT_IN))
-        # The strip is a separate block, not a third row of the same grid: the rotated
-        # x tick labels of (c) and (d) are tall, and a flat 3x2 grid puts them on top of
-        # the title of (e).
         outer = figure.add_gridspec(2, 1, height_ratios=(2.0, STRIP_RATIO),
                                     left=MARGINS["left"], right=MARGINS["right"],
                                     bottom=MARGINS["bottom"], top=MARGINS["top"],
@@ -290,15 +220,10 @@ def build_overview(curves, bench, means, orders, out: Path) -> None:
                          [figure.add_subplot(body[1, 0]), figure.add_subplot(body[1, 1])]])
         strip = figure.add_subplot(outer[1])
 
-        # per-graph score: the seed mean of A for one substrate, then one point per graph
         per_graph = (bench.groupby(["dataset", "method"])["A"].mean().reset_index())
         data = [per_graph.loc[per_graph["method"] == name, "A"].to_numpy() for name in ranking]
         position = np.arange(len(ranking))
 
-        # (d) must be additively consistent with (c): the two bars are the mean of the two
-        # metric areas inside one attack mode, so the printed A is *literally* the mean of
-        # the two bar heights.  Plotting the bare GCC areas beside A would put a 0.40 bar
-        # next to a 0.27 figure and invite exactly the reading the old version produced.
         aggregates = {
             "Targeted": [0.5 * (float(table.loc[name, "R_gcc_tar"])
                                 + float(table.loc[name, "R_e_tar"])) for name in ranking],
@@ -306,9 +231,6 @@ def build_overview(curves, bench, means, orders, out: Path) -> None:
                               + float(table.loc[name, "R_e_ran"])) for name in ranking],
             "A": [mean_a[name] for name in ranking],
         }
-        # The boxes of (c) reach above the two bar means (BiT-HyRL's worst substrate sits at
-        # 0.369 against a mean of 0.271), so the axis has to clear the per-graph maximum as
-        # well, not just the bar heights; otherwise the top whisker and its label are clipped.
         peak = max(max(max(values) for values in aggregates.values()),
                    max(float(np.max(values)) for values in data))
         y_top = 0.05 * np.ceil((peak + 0.02) / 0.05)
@@ -349,18 +271,10 @@ def build_overview(curves, bench, means, orders, out: Path) -> None:
             axes[1, 1].bar(position + offset, aggregates[name], width=width,
                            color=[STYLE[method][0] for method in ranking], alpha=alpha,
                            edgecolor="black", linewidth=0.4, hatch=hatch)
-        # A is the mean of the two bars, so it is marked at its own level rather than drawn
-        # as a third bar: a third bar of a different quantity is what made the old version
-        # print 0.271 beside two bars of 0.40.
         axes[1, 1].plot(position, aggregates["A"], ls="", marker="D", ms=3.4,
                         mfc="0.10", mec="white", mew=0.6, zorder=8,
                         label="$A$ (mean of the two)")
         from matplotlib.patches import Patch
-        # The bars are the two attack modes; with the stochastic construction gone from the
-        # panels, "Random" alone would read as a method name again, so the legend spells out
-        # what the two bars are.  The entries are listed [targeted, A, random] because the
-        # legend fills column-wise: two columns of two rows then read "targeted | random"
-        # on the first line and A underneath, which is the only way all three fit the panel.
         axes[1, 1].legend(handles=[Patch(facecolor="0.55", edgecolor="black", hatch="///",
                                          label="Targeted attack"),
                                    plt.Line2D([], [], ls="", marker="D", ms=3.4,
@@ -388,28 +302,14 @@ def build_overview(curves, bench, means, orders, out: Path) -> None:
         print(f"[out] {out / 'construction_overview.pdf'}")
 
 
-#: Marker areas of the two panels.  One value per role, used in both panels, so a dot in
-#: (a) and the dot of the same construction in (b) read as the same object.
 DOT, HERO_DOT = 15.0, 54.0
 HERO = "BiT-HyRL"
-#: Left edge of (b)'s log axis: a whole decade, so that the first major tick is labelled.
-#: Nothing sits left of BA at 26.5 ms once Original is removed, but a decade marker at the
-#: corner still tells the reader where the scale starts.
 PLOT_X_MIN = 1.0e-2
-#: ``Original`` is the graph as given: it has no construction step, so it has no abscissa in
-#: (b), whose axis is a wall clock.  Placing it at a made-up 5 ms made it read as the fastest
-#: construction on the panel.  It stays in (a), where the abscissa is a property of the graph
-#: and not of the process, and the caption says so.
 NO_COST = "Original"
 
 
 def _edge(colour: str, factor: float = 0.70):
-    """A darker version of a fill colour, for a hairline rim on the dots.
-
-    Two of the seven fills are pale by design (``QDLM`` above all); at 4 pt across and 100 %
-    print they lose their outline on white.  A rim in the fill's own hue, darkened, restores
-    the boundary without introducing a second colour or changing the palette.
-    """
+    """A darker version of a fill colour, for a hairline rim on the dots."""
     from matplotlib.colors import to_rgb
     return tuple(channel * factor for channel in to_rgb(colour))
 
@@ -419,17 +319,8 @@ def build_mechanism(points: pd.DataFrame, means: pd.DataFrame, ranking: list[str
     with plt.rc_context(MATH_STYLE):
         figure, axes = plt.subplots(1, 2, figsize=(7.0, 2.02))
         table = means.set_index("method")
-        # ``fig_points.csv`` also carries BiT-E, BiT-R, Random, ONION and Eff-R-Net, which
-        # the ranking figure does not draw.  The connectors are built from the drawn rows
-        # only: joining points that are not on the panel produced segments with one end in
-        # mid-air (150 of 360) and a comb of vertical segments wherever a hidden
-        # construction shared the kappa of a drawn one.
         drawn = points[points["method"].isin(ranking)].copy()
 
-        # Connectors first, so the dots sit on top of them.  One line per substrate; the
-        # claim is conditional on the substrate, because the graph-to-graph offsets are
-        # larger than the effect.  Ties in kappa are walked upwards in A, so a shared kappa
-        # gives one vertical step instead of a zigzag.
         for _, group in drawn.groupby("dataset"):
             group = group.sort_values(["kappa", "A"])
             axes[0].plot(group["kappa"], group["A"], color="0.40", lw=0.34, alpha=0.30,
@@ -460,9 +351,6 @@ def build_mechanism(points: pd.DataFrame, means: pd.DataFrame, ranking: list[str
         axes[0].set_title("(a) Mechanism: $A$ against $\\kappa$", loc="left")
         bold_ticks(axes[0])
 
-        # (b) is the same quantity on a zoomed vertical scale, and it carries the reference
-        # line of BiT-HyRL's A: no slower construction reaches it.  The repeated y label is
-        # dropped for that reason and replaced by an in-panel reminder of the scale.
         reference = float(table.loc[HERO, "A"])
         for name in ranking:
             if name == NO_COST:
@@ -522,8 +410,6 @@ def main(argv: list[str] | None = None) -> int:
     out.mkdir(parents=True, exist_ok=True)
 
     curves, bench, means = load(args.dataset)
-    # the benchmark writes the deployed arm as ``BiT-A``; the tables and the text call it
-    # ``BiT-HyRL``, so the rename happens once, here, rather than in every panel.
     bench["method"] = bench["method"].replace({"BiT-A": "BiT-HyRL"})
     points = pd.read_csv(DATA / "fig_points.csv")
     orders = pd.read_csv(DATA / "attack_orders" / "attack_orders_summary.csv")

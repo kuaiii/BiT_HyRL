@@ -1,7 +1,7 @@
-"""MADQN-sim placement proxy — ported from ``scripts/evaluate_physical_control_metrics.py``.
+"""MADQN-sim placement proxy.
 
-``select_madqn_proxy``: one reproducible seeded greedy rollout approximating MADQN
-placement.  Honestly labelled ``-sim`` — it is a proxy, not the original method.
+``select_madqn_proxy`` runs a single seeded greedy rollout that approximates MADQN
+placement; the ``-sim`` suffix marks it as a proxy rather than the original method.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def select(graph: nx.Graph, budget: int, seed: int = 0) -> list[int]:
         if not nodes:
             return []
         budget = min(int(budget), len(nodes))
-        rng = random.Random(seed)  # local RNG (does not touch process-global state)
+        rng = random.Random(seed)
         degree = np.array([graph.degree(node) for node in nodes], dtype=np.float64)
         degree /= max(1.0, float(degree.max()))
 

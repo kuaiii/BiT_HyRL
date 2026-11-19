@@ -1,17 +1,4 @@
-"""Figure generation from the matrix long table (T12).
-
-Uses the non-interactive ``Agg`` backend so it runs head-less (no display).  Three
-figures are produced from a single matrix CSV:
-
-1. **robustness** — mean ``GCC/N`` vs ``f`` per dataset, ``original`` vs ``bit``;
-2. **ablation** — the 2x2 (topology x placement) bar with the three effects;
-3. **F10** — the conflict-#22 panel: 2 topologies x 3 metrics (GCC / CSA / H_C)
-   over 2 representative datasets.
-
-Every figure degrades gracefully: a missing dataset or column logs a warning and
-skips that figure, but the others are still written.  Both ``.pdf`` and ``.png``
-are saved.  These library functions never ``print`` (the CLI reports the files).
-"""
+"""Figure generation from the matrix table."""
 
 from __future__ import annotations
 
@@ -22,7 +9,7 @@ from typing import Any
 
 import matplotlib
 
-matplotlib.use("Agg")  # head-less backend; must precede pyplot import
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
@@ -77,7 +64,7 @@ def _mean_curve(frame, topology: str, dataset: str) -> tuple[np.ndarray, np.ndar
         grids = np.mean([grid for grid, _ in pairs], axis=0)
         curves = np.mean([curve for _, curve in pairs], axis=0)
         return grids, curves
-    return pairs[0]  # mixed lengths (shouldn't happen within a dataset): use first
+    return pairs[0]
 
 
 def figure_robustness(frame, out_dir: Path, *, max_datasets: int = 6) -> dict[str, Any] | None:
@@ -199,27 +186,17 @@ def figure_f10(frame, out_dir: Path) -> dict[str, Any] | None:
 
 
 def make_all_figures(frame, out_dir: str | Path | None = None, *, smoke: bool = False) -> list[dict[str, Any]]:
-    """Render every figure that the data supports; return artefact descriptors.
-
-    Args:
-        frame: The long-table ``DataFrame`` from ``run_matrix`` (or a matrix CSV).
-        out_dir: Output directory; defaults to ``results/figures``.
-        smoke: Present for symmetry with the other commands (no behaviour change).
-
-    Returns:
-        A list of ``{"name", "pdf", "png", "size_png"}`` descriptors (one per
-        figure that was successfully written).
-    """
+    """Render every figure that the data supports; return artefact descriptors."""
     target = ensure_dir(Path(out_dir) if out_dir is not None else RESULTS_ROOT / "figures")
     if frame is None or len(frame) == 0:
-        LOGGER.warning("matrix 为空，无法出图")
+        LOGGER.warning("empty matrix, nothing to plot")
         return []
     figures: list[dict[str, Any]] = []
     for builder in (figure_robustness, figure_ablation, figure_f10):
         try:
             result = builder(frame, target)
         except Exception as exc:  # pragma: no cover - defensive degrade
-            LOGGER.warning("图生成失败（%s），降级跳过：%s", builder.__name__, exc)
+            LOGGER.warning("figure %s failed, skipped: %s", builder.__name__, exc)
             result = None
         if result:
             figures.append(result)

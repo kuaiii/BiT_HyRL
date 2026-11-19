@@ -1,19 +1,7 @@
-"""Construction-seed sensitivity: is the reported gain a lucky realisation?
+"""Construction-seed sensitivity: does the reported gain depend on the realisation?
 
-Every result so far builds the BiT graph with ``seed=0`` (the 2-switch decorrelation runs
-``10M`` swaps from that seed).  The degree sequence is identical for every seed, so the only
-thing that changes is *which* edges realise it.  A reviewer is entitled to ask whether the
-reported gain depends on that choice -- especially now that we know the metric is sensitive
-to another arbitrary choice (node labels, ARGUMENTS 5.5).
-
-This script rebuilds each graph at several construction seeds, re-places controllers with the
-same policy, and evaluates under the standard protocol.  The quantity of interest is not the
-mean over seeds but the **spread**: if the worst seed still beats the un-reconstructed
-original, the claim does not rest on a lucky draw.
-
-Usage:
-    python scripts/construction_seed_sensitivity.py
-    python scripts/construction_seed_sensitivity.py --build-seeds 0,1,2,3,4
+Rebuilds the BiT graph under several 2-switch seeds (the degree sequence is
+identical by construction) and repeats the evaluation.
 """
 
 from __future__ import annotations
@@ -45,7 +33,7 @@ OUT = REPO_ROOT / "results" / "family" / "construction_seed.csv"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="重构随机种子的敏感性")
+    parser = argparse.ArgumentParser(description="sensitivity to the construction seed")
     parser.add_argument("--build-seeds", default="0,1,2,3,4")
     parser.add_argument("--eval-seeds", type=int, default=3)
     parser.add_argument("--c", default="1.6")
@@ -72,7 +60,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         original, _meta = load_graph_spec(spec)
         n_c = max(1, round(0.1 * original.number_of_nodes()))
 
-        # baseline: the un-reconstructed graph, same placement and protocol
         base_controllers = [int(v) for v in policy_obj.select(original, n_c, greedy=True)]
         for attack in ("degree", "random"):
             for seed in range(args.eval_seeds):
@@ -100,7 +87,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                  "attack": attack, "eval_seed": seed,
                                  "r_res": round(float(record.r_res), 6)})
 
-        pd.DataFrame(rows).to_csv(out_path, index=False)   # incremental: timeout-safe
+        pd.DataFrame(rows).to_csv(out_path, index=False)
         print(f"[{index:2d}/{len(wanted)}] {dataset:16s} n={original.number_of_nodes():5d} "
               f"baseline={np.mean([r['r_res'] for r in rows if r['dataset'] == dataset and r['arm'] == 'original']):.4f}")
 

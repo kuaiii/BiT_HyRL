@@ -37,67 +37,6 @@ def get_first_non_zero_laplacian_eig(Ls: np.ndarray,
     return Ls[np.where(Ls > zero_threshold)[0]][0]
 
 
-# def entropy_diff_time_small(G: Graph,
-#                             beta=0.9,
-#                             zero_threshold=zero_threshold,
-#                             ):
-#     Ls = get_sorted_eigvals(G)
-#     diff_time = get_first_non_zero_laplacian_eig(Ls,
-#                                                  zero_threshold=zero_threshold,
-#                                                  )
-#     # k_ = len(G.edges()) / len(G.nodes())
-#     # # max_S = np.log(len(G.nodes))/100
-#     # # N = np.log(len(G.nodes()))
-#     # # n_ = np.log(len(G.nodes))
-#     beta = -np.log(beta) / diff_time
-#     # # beta = -np.log(10/(len(G.edges())/len(G.nodes())))/diff_time
-#     # # beta = (diff_time + k_)/2
-#     # print('beta = ', beta)
-#     sp = np.exp(-beta * Ls)
-#     Z = np.sum(sp)
-#     p = np.exp(-beta * Ls) / Z
-#     p = p[p > 10 ** -20]
-#     S = np.sum(-p * np.log2(p))
-#     return S, beta
-#
-#
-# def entropy_diff_time_mid(G,
-#                           beta=0.33,
-#                           ):
-#     Ls = np.sort(nx.laplacian_spectrum(G))
-#     diff_time = Ls[np.where(Ls > 10 ** -12)[0]][0]
-#     # k_ = len(G.edges()) / len(G.nodes())
-#     # # max_S = np.log(len(G.nodes))/100
-#     # # N = np.log(len(G.nodes()))
-#     # # n_ = np.log(len(G.nodes))
-#     beta = -np.log(.33) / diff_time
-#     # beta = -np.log(10/(len(G.edges())/len(G.nodes())))/diff_time
-#     # beta = (diff_time + k_)/2
-#     print('beta = ', beta)
-#     sp = np.exp(-beta * Ls)
-#     Z = np.sum(sp)
-#     p = np.exp(-beta * Ls) / Z
-#     p = p[p > 10 ** -20]
-#     S = np.sum(-p * np.log2(p))
-#     return S, beta
-#
-#
-# def entropy_diff_time_large(G,
-#                             beta=0.01,
-#                             ):
-#     Ls = np.sort(nx.laplacian_spectrum(G))
-#     diff_time = Ls[np.where(Ls > 10 ** -12)[0]][0]
-#     k_ = len(G.edges()) / len(G.nodes())
-#     beta = -np.log(beta) / diff_time
-#     print('beta = ', beta)
-#     sp = np.exp(-beta * Ls)
-#     Z = np.sum(sp)
-#     p = np.exp(-beta * Ls) / Z
-#     p = p[p > 10 ** -20]
-#     S = np.sum(-p * np.log2(p))
-#     return S, beta
-
-
 def entropy_diff_time(G: Graph,
                       beta: float,
                       p_threshold: float = p_threshold,
@@ -138,63 +77,6 @@ def entropy(G: Graph,
     Ls = get_sorted_eigvals(G)
 
     return get_entropy(Ls, beta)
-
-
-# def entanglement_small(G):
-#     S_1, beta = entropy_diff_time_small(G)
-#     ent = {}
-#     nodes = list(G.nodes())
-#     # for i in pbar(range(len(nodes))):
-#
-#     for i in range(len(nodes)):
-#         # for i in range(len(nodes)):
-#         G_i = G.copy()
-#         k = G_i.degree[nodes[i]]
-#         G_i.remove_node(nodes[i])
-#         S_2 = entropy(G_i, beta)
-#         G_star = nx.star_graph(k + 1)
-#         S_star = entropy(G_star, beta)
-#
-#         S_2 = S_2 + S_star
-#         ent[nodes[i]] = S_2 - S_1
-#     return ent
-#
-#
-# def entanglement_mid(G):
-#     # pbar = ProgressBar()
-#     S_1, beta = entropy_diff_time_mid(G)
-#     ent = {}
-#     nodes = list(G.nodes())
-#     for i in range(len(nodes)):
-#         # for i in range(len(nodes)):
-#         G_i = G.copy()
-#         k = G_i.degree[nodes[i]]
-#         G_i.remove_node(nodes[i])
-#         S_2 = entropy(G_i, beta)
-#         G_star = nx.star_graph(k + 1)
-#         S_star = entropy(G_star, beta)
-#
-#         S_2 = S_2 + S_star
-#         ent[nodes[i]] = S_2 - S_1
-#     return ent
-#
-#
-# def entanglement_large(G):
-#     S_1, beta = entropy_diff_time_large(G)
-#     ent = {}
-#     nodes = list(G.nodes())
-#     for i in range(len(nodes)):
-#         # for i in range(len(nodes)):
-#         G_i = G.copy()
-#         k = G_i.degree[nodes[i]]
-#         G_i.remove_node(nodes[i])
-#         S_2 = entropy(G_i, beta)
-#         G_star = nx.star_graph(k + 1)
-#         S_star = entropy(G_star, beta)
-#
-#         S_2 = S_2 + S_star
-#         ent[nodes[i]] = S_2 - S_1
-#     return ent
 
 
 def compute_entropy_value(
@@ -263,9 +145,6 @@ def entanglement(G: Graph,
                      list(G.iter_vertices()),
                      chunksize=chunksize,
                      ),
-        # desc="Computing entanglement",
-        # total=G.num_vertices(),
-        # )
     )
 
     entropy_values = np.array(entropy_values)

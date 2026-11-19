@@ -89,18 +89,7 @@ def checkpoints_dir() -> Path:
 
 
 def atomic_write_text(path: str | Path, text: str) -> Path:
-    """Write ``text`` to ``path`` atomically (write temp file, then rename).
-
-    A crash mid-write therefore leaves either the old file or the new one, never
-    a truncated JSON document.
-
-    Args:
-        path: Destination file; parent directories are created.
-        text: UTF-8 payload.
-
-    Returns:
-        The destination path.
-    """
+    """Write ``text`` to ``path`` atomically (write temp file, then rename)."""
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     handle, temp_name = tempfile.mkstemp(
@@ -121,7 +110,7 @@ def atomic_write_text(path: str | Path, text: str) -> Path:
 
 def atomic_write_json(path: str | Path, obj: object, *, indent: int | None = 2) -> Path:
     """Atomically write ``obj`` as canonical JSON (see :mod:`.jsonlog`)."""
-    from .jsonlog import dumps  # local import keeps module import order simple
+    from .jsonlog import dumps
 
     text = dumps(obj, indent=indent)
     if indent is not None:
@@ -130,11 +119,7 @@ def atomic_write_json(path: str | Path, obj: object, *, indent: int | None = 2) 
 
 
 def format_c(c: float) -> str:
-    """Format the hub factor for use inside identifiers.
-
-    ``1.6`` → ``"1.6"``, ``3.0`` → ``"3"``.  Used by :func:`make_run_id` so that
-    ``run_id`` strings stay short and stable.
-    """
+    """Format the hub factor for use inside identifiers."""
     number = float(c)
     if number.is_integer():
         return str(int(number))
@@ -143,37 +128,14 @@ def format_c(c: float) -> str:
 
 def make_run_id(dataset: str, topology: str, c: float, policy: str,
                 attack: str, seed: int) -> str:
-    """Build the canonical run identifier.
-
-    Args:
-        dataset: Dataset name, e.g. ``"BA-100"``.
-        topology: ``"original"`` or ``"bit"``.
-        c: Hub factor (only used for ``topology="bit"``, but always recorded).
-        policy: Controller policy name.
-        attack: Attack method name.
-        seed: Root seed.
-
-    Returns:
-        ``"{dataset}__{topology}__c{c}__{policy}__{attack}__s{seed}"``.
-    """
+    """Build the canonical run identifier."""
     return f"{dataset}__{topology}__c{format_c(c)}__{policy}__{attack}__s{int(seed)}"
 
 
 def dataset_path(dataset: str, *, data_root: str | Path | None = None) -> Path:
-    """Return the pinned ``.gml`` path of ``dataset``.
-
-    Args:
-        dataset: Dataset name without extension, e.g. ``"Cogentco"``.
-        data_root: Override of :data:`DATA_ROOT` (tests only).
-
-    Returns:
-        Path to ``<data_root>/<dataset>.gml``.
-
-    Raises:
-        FileNotFoundError: If the file does not exist.
-    """
+    """Return the pinned ``.gml`` path of ``dataset``."""
     root = Path(data_root) if data_root is not None else DATA_ROOT
     candidate = root / f"{dataset}.gml"
     if not candidate.is_file():
-        raise FileNotFoundError(f"找不到图数据 {candidate}")
+        raise FileNotFoundError(f"graph data not found: {candidate}")
     return candidate

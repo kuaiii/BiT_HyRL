@@ -1,15 +1,8 @@
-"""Single command-line entry point.
+"""Command-line entry point.
 
-Implemented in this batch:
-
-* ``fingerprint`` — tolerant load + fingerprint of every pinned graph;
-* ``construct``   — one BiT construction with its plan and diagnostics;
-* ``sweep-c``     — the ``c`` sensitivity sweep;
-* ``verify``      — every hard numeric check, in one pass.
-
-The remaining sub-commands exist so that ``--help`` is the full contract, and
-raise :class:`NotImplementedError` naming the task that will implement them.  A
-stub that fails loudly is honest; a stub that silently returns zeros is not.
+Sub-commands: ``fingerprint``, ``construct``, ``sweep-c``, ``verify``, ``train``,
+``eval``, ``transfer``, ``ablate``, ``matrix``, ``method-matrix`` and
+``method-stats``.
 """
 
 from __future__ import annotations
@@ -70,34 +63,17 @@ __all__ = ["main", "build_parser"]
 
 LOGGER = logging.getLogger("bit_hyrl.cli")
 
-#: Sub-commands deferred to later tasks.  ``--help`` shows them all; calling one
-#: raises immediately with the owning task id.
-#: Sub-commands still deferred.  Empty: T11 (ablate) and T12 (matrix/stats/figures)
-#: are implemented by :mod:`bit_hyrl.analysis` and wired below.
 _DEFERRED: dict[str, str] = {}
 
 #: Paper reward weights ``(w_G, w_S, w_H, w_D)`` — distance disabled.
 _PAPER_REWARD_WEIGHTS = {"structure": 0.6, "csa": 0.2, "h_load": 0.2, "distance": 0.0}
 
 
-# --------------------------------------------------------------------------- #
-# helpers
-# --------------------------------------------------------------------------- #
 def _load_graph_registry(path: str | Path | None = None) -> list[dict[str, Any]]:
-    """Load ``configs/graphs.json`` and resolve relative paths.
-
-    Args:
-        path: Override for the default registry location.
-
-    Returns:
-        List of graph specs, each with an absolute ``path``.
-
-    Raises:
-        FileNotFoundError: If the registry is missing.
-    """
+    """Load ``configs/graphs.json`` and resolve relative paths."""
     registry_path = Path(path) if path is not None else io_paths.GRAPHS_CONFIG_FILE
     if not registry_path.is_file():
-        raise FileNotFoundError(f"找不到图清单 {registry_path}")
+        raise FileNotFoundError(f"graph registry not found: {registry_path}")
     payload = json.loads(registry_path.read_text(encoding="utf-8"))
     specs: list[dict[str, Any]] = []
     for entry in payload.get("graphs", []):
@@ -111,16 +87,12 @@ def _load_graph_registry(path: str | Path | None = None) -> list[dict[str, Any]]
 
 
 def _find_spec(dataset: str) -> dict[str, Any]:
-    """Return the registry entry for ``dataset``.
-
-    Raises:
-        KeyError: If the dataset is not in the registry.
-    """
+    """Return the registry entry for ``dataset``."""
     for spec in _load_graph_registry():
         if spec.get("dataset") == dataset:
             return spec
     known = [spec.get("dataset") for spec in _load_graph_registry()]
-    raise KeyError(f"未知数据集 {dataset!r}，清单里有 {known}")
+    raise KeyError(f"unknown dataset {dataset!r}; the registry has {known}")
 
 
 def _parse_grid(value: str) -> list[float]:
@@ -129,7 +101,7 @@ def _parse_grid(value: str) -> list[float]:
         return [float(c) for c in DEFAULT_C_GRID]
     parts = [part for part in value.replace(";", ",").split(",") if part.strip()]
     if not parts:
-        raise argparse.ArgumentTypeError("--grid 不能为空")
+        raise argparse.ArgumentTypeError("--grid cannot be empty")
     return [float(part) for part in parts]
 
 
@@ -152,9 +124,6 @@ def _print_json(payload: Any) -> None:
     sys.stdout.write("\n")
 
 
-# --------------------------------------------------------------------------- #
-# fingerprint
-# --------------------------------------------------------------------------- #
 def cmd_fingerprint(args: argparse.Namespace) -> int:
     """Load every pinned graph, fingerprint it and (optionally) pin the hashes."""
     specs = _load_graph_registry(args.graphs)
@@ -177,18 +146,15 @@ def cmd_fingerprint(args: argparse.Namespace) -> int:
     payload = {"schema_version": FINGERPRINT_SCHEMA_VERSION, "graphs": report}
     if args.write:
         target = io_paths.atomic_write_json(io_paths.fingerprints_file(), payload)
-        LOGGER.info("指纹已写入 %s", target)
+        LOGGER.info("fingerprints written to %s", target)
     if not args.quiet:
         _print_json(payload)
     if failures:
-        LOGGER.error("共 %d 张图与金标准不符", len(failures))
+        LOGGER.error("%d graphs do not match the pinned fingerprint", len(failures))
         return 1
     return 0
 
 
-# --------------------------------------------------------------------------- #
-# construct
-# --------------------------------------------------------------------------- #
 def cmd_construct(args: argparse.Namespace) -> int:
     """Construct one BiT graph and print its plan, diagnostics and fingerprint."""
     spec = _find_spec(args.dataset)
@@ -222,47 +188,20 @@ def cmd_construct(args: argparse.Namespace) -> int:
     if args.write:
         target = io_paths.results_path("construct", f"{args.dataset}__c{args.c}.json")
         io_paths.atomic_write_json(target, payload)
-        LOGGER.info("构造结果已写入 %s", target)
+        LOGGER.info("construction written to %s", target)
     if not args.quiet:
         _print_json(payload)
     return 0 if result.connected or args.allow_disconnected else 1
 
 
-# --------------------------------------------------------------------------- #
-# probe
-# --------------------------------------------------------------------------- #
 def _controllers_for(graph: nx.Graph, count: int) -> list[int]:
-    """Degree-ranked controller placement with a node-id tie-break.
-
-    The real placement policies arrive with the RL layer; ``probe`` needs a
-    deterministic baseline so that "does θ bind?" can be answered before any
-    policy exists.
-    """
+    """Degree-ranked controller placement with a node-id tie-break."""
     order = sorted(graph.nodes(), key=lambda node: (-graph.degree(node), node))
     return [int(node) for node in order[:count]]
 
 
 def cmd_probe(args: argparse.Namespace) -> int:
-    """Capacity model + ``probe_max_utilisation`` for one graph (no deletion).
-
-    The probe reports three separate quantities because they answer three
-    different questions:
-
-    * ``u_nearest`` — how lopsided the degree-ranked placement is if capacity is
-      ignored.  Measured 1.13–2.73 on the nine graphs;
-    * ``u_after_spill`` — the utilisation that actually occurs once the
-      capacity-enforced spill is applied.  Measured **1.000** everywhere, with no
-      unassigned switch;
-    * ``feasible`` — ``Σ demand <= Σ capacity`` per component.  **True** on all
-      nine, which is the only sound basis for "capacity does not bind at t = 0".
-
-    ``ceiling_active`` and ``capacity_binds`` answer two different questions and
-    must not be merged: ``ceiling_active`` is ``True`` on all nine graphs (some
-    controller is exactly at ``C`` — the ceiling is *live*), while
-    ``capacity_binds`` is ``False`` on all nine (the demand is *satisfiable*).
-    A known aggregate slack of 60…300 can never make ``capacity_binds`` true at
-    ``t = 0``.
-    """
+    """Capacity model + ``probe_max_utilisation`` for one graph (no deletion)."""
     spec = _find_spec(args.dataset)
     source = load_graph(spec["path"])
     plan = plan_degree_sequence(
@@ -298,32 +237,14 @@ def cmd_probe(args: argparse.Namespace) -> int:
     if args.write:
         target = io_paths.results_path("probe", f"{args.dataset}__c{args.c}.json")
         io_paths.atomic_write_json(target, payload)
-        LOGGER.info("探针结果已写入 %s", target)
+        LOGGER.info("probe written to %s", target)
     if not args.quiet:
         _print_json(payload)
     return 0
 
 
-# --------------------------------------------------------------------------- #
-# feasibility
-# --------------------------------------------------------------------------- #
 def cmd_feasibility(args: argparse.Namespace) -> int:
-    """Capacity feasibility along every attack sequence, per graph.
-
-    This is the evidence: at ``t = 0`` the constraint is slack on all nine
-    graphs, so the publishable statement is *when* it stops being slack — ``f*``
-    — and how much extra failure it then causes.  Both are produced here:
-
-    * the per-mode curves (``f / k / Σdemand / Σcapacity / feasible`` per step);
-    * the **onset table**, which pairs each ``structural`` curve with the
-      ``capacity`` curve over the identical attack sequence and reports
-      ``f*`` plus ``extra_dead_after_onset`` (nodes the overload cascade kills
-      that ``structural`` mode would not have killed).
-
-    ``--mode`` still selects which curve the *primary* artefact is written for,
-    but both modes are always run, because ``f*`` without the extra-death column
-    would be a threshold with no consequence attached to it.
-    """
+    """Capacity feasibility along every attack sequence, per graph."""
     datasets = (
         [str(spec["dataset"]) for spec in _load_graph_registry()]
         if args.dataset == "all"
@@ -360,22 +281,20 @@ def cmd_feasibility(args: argparse.Namespace) -> int:
                         dataset=dataset, attack=method,
                     )
                 )
-            # Structural and capacity share the sequence *instance* above, so the
-            # step counts necessarily agree and the pairing cannot silently break.
             if len(curves["structural"]) != len(curves["capacity"]):
-                raise RuntimeError("structural 与 capacity 曲线数量不一致")
+                raise RuntimeError("the structural and capacity curve counts differ")
 
     records = onset_records(curves["structural"], curves["capacity"])
     table = format_onset_table(records)
     if args.write:
         written = write_onset_outputs(records, name="onset")
-        LOGGER.info("首次不可行统计已写盘 %s / %s", written["json"], written["txt"])
+        LOGGER.info("onset records written to %s / %s", written["json"], written["txt"])
         for mode in ("structural", "capacity"):
             curves_written = write_feasibility_outputs(
                 curves[mode], name=f"feasibility__{mode}"
             )
             LOGGER.info(
-                "%s 可行性曲线已写盘 %s / %s",
+                "%s: feasibility curves written to %s / %s",
                 mode, curves_written["json"], curves_written["txt"],
             )
     if not args.quiet:
@@ -385,18 +304,8 @@ def cmd_feasibility(args: argparse.Namespace) -> int:
     return 0
 
 
-# --------------------------------------------------------------------------- #
-# sweep-c
-# --------------------------------------------------------------------------- #
 def cmd_sweep_c(args: argparse.Namespace) -> int:
-    """Run the ``c`` sweep and optionally persist JSON + CSV.
-
-    ``--grid-kind c`` (default) sweeps raw ``c`` on the design's 12 points;
-    ``--grid-kind c_norm`` sweeps ``c_norm`` on the 11 normalised points, which is
-    the controlled comparison — the same ``c`` means a different shape on every
-    graph, so only the normalised grid puts all nine at the same position on one
-    shape spectrum.
-    """
+    """Run the ``c`` sweep and optionally persist JSON + CSV."""
     if args.grid_kind == "c_norm":
         grid: Sequence[float] = (
             C_NORM_GRID
@@ -424,7 +333,7 @@ def cmd_sweep_c(args: argparse.Namespace) -> int:
                 rows, dataset,
                 stem="sweep_c_norm" if args.grid_kind == "c_norm" else "sweep_c",
             )
-            LOGGER.info("%s: 写盘 %s / %s", dataset, written["json"], written["csv"])
+            LOGGER.info("%s: written to %s / %s", dataset, written["json"], written["csv"])
         if not args.quiet and args.dataset != "all":
             _print_json(
                 {
@@ -435,27 +344,18 @@ def cmd_sweep_c(args: argparse.Namespace) -> int:
                 }
             )
     if args.write and args.dataset == "all":
-        LOGGER.info("已写盘 %d 个数据集的 sweep", len(everything))
+        LOGGER.info("sweep written for %d datasets", len(everything))
     return 0
 
 
-# --------------------------------------------------------------------------- #
-# verify
-# --------------------------------------------------------------------------- #
-_GOLDEN_MONO = "（金标准见 configs/graphs.json）"
+_GOLDEN_MONO = " (pinned values in configs/graphs.json)"
 
-#: κ at four decimals for the nine constructed graphs (c = 1.6, h = 1).  κ is a
-#: function of the degree sequence alone, so it is invariant under ``realize``.
 _GOLDEN_KAPPA_4DP: dict[str, float] = {
     "BA-100": 5.8660, "BA-200": 5.9340, "BA-300": 5.9607, "BA-400": 5.9706,
     "BA-500": 5.9765, "Cogentco": 2.5720, "Colt": 2.4124, "GtsCe": 2.6891,
     "UsCarrier": 2.4974,
 }
 
-#: ``(max diameter, max mean path)`` per graph — the *ensemble* band, i.e. the only
-#: distance claim the paper may make.  A single realisation scatters by ±1 on the
-#: diameter and by up to 5 % on the mean path, so a point value here would be a
-#: false precision.
 _DISTANCE_BANDS: dict[str, tuple[int, float]] = {
     "BA-100": (10, 6.0), "BA-200": (10, 6.0), "BA-300": (10, 6.0),
     "BA-400": (10, 6.0), "BA-500": (10, 6.0),
@@ -491,9 +391,6 @@ def _table(headers: Sequence[str], rows: Sequence[Sequence[Any]]) -> str:
     return "\n".join(lines)
 
 
-# --------------------------------------------------------------------------- #
-# eval
-# --------------------------------------------------------------------------- #
 def _expand_attacks(attack: str) -> list[str]:
     """Resolve the ``--attack`` CLI value into a concrete method list."""
     if attack == "all":
@@ -502,15 +399,7 @@ def _expand_attacks(attack: str) -> list[str]:
 
 
 def cmd_eval(args: argparse.Namespace) -> int:
-    """End-to-end evaluation runner: original vs BiT dual curves.
-
-    For every selected graph it runs the pipeline under each requested topology and
-    persists one :class:`~bit_hyrl.evaluation.record.EvaluationRecord` per
-    ``(topology, attack, mode)`` into ``results/records/``.  With
-    ``--topology both`` it also prints a one-line comparison of the robustness area
-    (AUC of the ``r_curve``) between the original substrate and the BiT
-    reconstruction — the core evidence for interpretation A.
-    """
+    """End-to-end evaluation runner: original vs BiT dual curves."""
     if args.dataset == "all":
         specs = _load_graph_registry()
     else:
@@ -524,7 +413,7 @@ def cmd_eval(args: argparse.Namespace) -> int:
     policy_obj = None
     if getattr(args, "policy", "degree_ranked") == "ppo":
         if not getattr(args, "checkpoint", None):
-            LOGGER.error("--policy ppo 需要 --checkpoint")
+            LOGGER.error("--policy ppo requires --checkpoint")
             return 2
         from .rl.transfer import load_policy
 
@@ -565,7 +454,7 @@ def cmd_eval(args: argparse.Namespace) -> int:
                 by_key[(name, topology, attack, args.mode)] = record
 
     if args.topology == "both":
-        header = f"{'图':<10} {'攻击':<12} {'orig AUC':>9} {'bit AUC':>9}  不同"
+        header = f"{'dataset':<10} {'attack':<12} {'orig AUC':>9} {'bit AUC':>9}  differs"
         if not args.quiet:
             print(header)
             print("-" * len(header))
@@ -582,25 +471,20 @@ def cmd_eval(args: argparse.Namespace) -> int:
                 if not args.quiet:
                     print(
                         f"{name:<10} {attack:<12} {original.auc_r:>9.4f} "
-                        f"{bit.auc_r:>9.4f}  {'是' if differ else '否'}"
+                        f"{bit.auc_r:>9.4f}  {'yes' if differ else 'no'}"
                     )
         if not args.quiet:
             print(
-                f"\n{len(records)} 条记录已写盘 {records_dir()}；"
-                f"original 与 bit 的 AUC 不同的图×攻击 = {differing}"
+                f"\n{len(records)} records written to {records_dir()}; "
+                f"dataset x attack cells where original and bit differ = {differing}"
             )
 
-    LOGGER.info("eval 完成：%d 条 EvaluationRecord → %s", len(records), records_dir())
+    LOGGER.info("eval finished: %d EvaluationRecords -> %s", len(records), records_dir())
     return 0
 
 
 def cmd_train(args: argparse.Namespace) -> int:
-    """Train a PPO controller-placement policy (paper Table-4 budget).
-
-    Two modes: ``--split configs/splits.json`` trains on the split's ``train``
-    list and early-stops on its ``val`` list; otherwise ``--dataset`` names
-    registry graphs (legacy).  All hyper-parameters use the paper's Table-4 values.
-    """
+    """Train a PPO controller-placement policy (paper Table-4 budget)."""
     import csv
     import time
 
@@ -633,8 +517,8 @@ def cmd_train(args: argparse.Namespace) -> int:
     cfg = TrainConfig(
         total_iterations=iterations,
         episodes_per_iter=episodes,
-        lr=float(args.lr),          # paper Table 4: 1e-4
-        gamma=float(args.gamma),    # paper Table 4: 0.99
+        lr=float(args.lr),
+        gamma=float(args.gamma),
         reward_weights=dict(_PAPER_REWARD_WEIGHTS),
     )
     out = Path(args.out) if args.out else checkpoints_dir() / f"ppo__{label}__s{args.seed}.pt"
@@ -649,7 +533,6 @@ def cmd_train(args: argparse.Namespace) -> int:
     )
     elapsed = time.time() - started
 
-    # History CSV (train + val reward per iteration).
     history = list(checkpoint.get("history", []))
     val_history = list(checkpoint.get("val_history", []))
     hist_dir = io_paths.RESULTS_ROOT / "train"
@@ -664,18 +547,18 @@ def cmd_train(args: argparse.Namespace) -> int:
 
     if not args.quiet:
         final = history[-1] if history else float("nan")
-        print(f"训练完成：{len(history)} 迭代 × {episodes} episode/迭代，耗时 {elapsed:.2f}s")
+        print(f"training finished: {len(history)} iterations x {episodes} episodes, {elapsed:.2f}s")
         if val_history:
-            print(f"val：{len(val_history)} 点，best_val={checkpoint.get('best_val')}，"
+            print(f"val: {len(val_history)} points, best_val={checkpoint.get('best_val')}, "
                   f"stopped_iter={checkpoint.get('stopped_iteration')}")
-        print(f"最终 train 奖励 {final:.4f}；checkpoint → {out}")
+        print(f"final training reward {final:.4f}; checkpoint -> {out}")
         print(f"history CSV → {hist_path}")
         print(
-            "论文表4超参：lr=%g γ=%g clip=%g gae=%g ent=%g epochs=%d rollouts/iter=%d "
-            "minibatch=32 grad_clip=0.5 value_coef=0.5；奖励权重 0.6/0.2/0.2/0"
+            "hyperparameters: lr=%g gamma=%g clip=%g gae=%g ent=%g epochs=%d rollouts/iter=%d "
+            "minibatch=32 grad_clip=0.5 value_coef=0.5; reward weights 0.6/0.2/0.2/0"
             % (cfg.lr, cfg.gamma, cfg.clip, cfg.gae_lambda, cfg.entropy_coef, cfg.epochs, episodes)
         )
-    LOGGER.info("train 完成：%s → %s（%.2fs）", label, out, elapsed)
+    LOGGER.info("train finished: %s -> %s (%.2fs)", label, out, elapsed)
     return 0
 
 
@@ -690,7 +573,7 @@ def cmd_transfer(args: argparse.Namespace) -> int:
     controllers = apply_policy(policy, graph, model.n_controllers)
 
     if not args.quiet:
-        print(f"{args.dataset}: 零样本放置 {len(controllers)}/{model.n_controllers} 个控制器")
+        print(f"{args.dataset}: zero-shot placement of {len(controllers)}/{model.n_controllers} controllers")
         print(f"controllers = {controllers}")
     payload = {
         "dataset": args.dataset,
@@ -702,8 +585,8 @@ def cmd_transfer(args: argparse.Namespace) -> int:
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(dumps(payload, indent=2) + "\n", encoding="utf-8")
-        LOGGER.info("transfer 结果已写 %s", out)
-    LOGGER.info("transfer 完成：%s ← %s", args.dataset, args.checkpoint)
+        LOGGER.info("transfer result written to %s", out)
+    LOGGER.info("transfer finished: %s <- %s", args.dataset, args.checkpoint)
     return 0
 
 
@@ -724,7 +607,7 @@ def cmd_ablate(args: argparse.Namespace) -> int:
     paths = write_ablation_outputs(result, out_dir=out_dir)
     if not args.quiet:
         cells = result["overall_cell_means"]
-        header = "拓扑/放置"
+        header = "topology/placement"
         print(f"{header:<16}{'degree_ranked':>15}{'ppo':>12}")
         for topology in ("original", "bit"):
             deg = cells.get(f"{topology}|degree_ranked", float("nan"))
@@ -732,11 +615,11 @@ def cmd_ablate(args: argparse.Namespace) -> int:
             print(f"{topology:<16}{deg:>15.4f}{ppo:>12.4f}")
         effects = result["effects"]
         print(
-            f"主效应: topology={effects['topology']:+.4f}  "
+            f"main effects: topology={effects['topology']:+.4f}  "
             f"policy={effects['policy']:+.4f}  interaction={effects['interaction']:+.6f}"
         )
         print(f"CSV → {paths['csv']}\nJSON → {paths['json']}")
-    LOGGER.info("ablate 完成：%d 行", len(result.get("rows", [])))
+    LOGGER.info("ablate finished: %d rows", len(result.get("rows", [])))
     return 0
 
 
@@ -759,8 +642,8 @@ def cmd_matrix(args: argparse.Namespace) -> int:
     out_dir = Path(args.out) if args.out else None
     paths = write_matrix_outputs(frame, out_dir=out_dir)
     if not args.quiet:
-        print(f"matrix: {len(frame)} 行 → {paths['csv']}")
-    LOGGER.info("matrix 完成：%d 行", len(frame))
+        print(f"matrix: {len(frame)} rows -> {paths['csv']}")
+    LOGGER.info("matrix finished: %d rows", len(frame))
     return 0
 
 
@@ -791,7 +674,7 @@ def cmd_method_matrix(args: argparse.Namespace) -> int:
     out_dir = Path(args.out) if args.out else None
     paths = write_method_matrix_outputs(frame, out_dir=out_dir)
     if not args.quiet:
-        print(f"method-matrix: {len(frame)} 行 → {paths['csv']}")
+        print(f"method-matrix: {len(frame)} rows -> {paths['csv']}")
         for name in methods:
             subset = frame[frame["policy"] == name]
             if len(subset):
@@ -801,7 +684,7 @@ def cmd_method_matrix(args: argparse.Namespace) -> int:
                     f"topology={row['topology']:<9} r_res={row['r_res']:.4f} "
                     f"auc_gcc={row['auc_gcc']:.4f}"
                 )
-    LOGGER.info("method-matrix 完成：%d 行", len(frame))
+    LOGGER.info("method-matrix finished: %d rows", len(frame))
     return 0
 
 
@@ -813,7 +696,7 @@ def cmd_method_stats(args: argparse.Namespace) -> int:
 
     frame = pd.read_csv(args.infile)
     if "policy" not in frame.columns:
-        LOGGER.error("输入 CSV 缺 policy 列：%s", list(frame.columns))
+        LOGGER.error("the input CSV has no policy column: %s", list(frame.columns))
         return 2
     sig = method_significance(frame, reference=args.reference)
     out = Path(args.out) if args.out else (io_paths.RESULTS_ROOT / "method_matrix" / "significance.csv")
@@ -833,7 +716,7 @@ def cmd_method_stats(args: argparse.Namespace) -> int:
                 f"r_res_p={row['wilcoxon_p']} {row['direction']}"
             )
         print(f"→ {out}")
-    LOGGER.info("method-stats 完成：%s（reference=%s）", out, args.reference)
+    LOGGER.info("method-stats finished: %s (reference=%s)", out, args.reference)
     return 0
 
 
@@ -845,12 +728,10 @@ def cmd_stats(args: argparse.Namespace) -> int:
 
     frame = pd.read_csv(args.infile)
     if args.metric not in frame.columns:
-        LOGGER.error("metric %r 不在列 %s", args.metric, list(frame.columns))
+        LOGGER.error("metric %r is not in the columns %s", args.metric, list(frame.columns))
         return 2
 
     seed_df = seed_statistics(frame)
-    # Holm family: the three core robustness metrics, plus the requested metric if
-    # it is not one of them (so `--metric r_res` still reports a Holm-adjusted p).
     family = ["auc_gcc", "auc_csa", "auc_hc"]
     if args.metric not in family:
         family.append(args.metric)
@@ -863,14 +744,14 @@ def cmd_stats(args: argparse.Namespace) -> int:
 
     if not args.quiet:
         sub = seed_df[seed_df["metric"] == args.metric]
-        print(f"== {args.metric}: seed 聚合 mean/std/95%CI ==")
+        print(f"== {args.metric}: per-seed aggregate mean/std/95%CI ==")
         for _, row in sub.iterrows():
             print(
                 f"  {row['dataset']}/{row['topology']}/{row['policy']}/{row['attack']}: "
                 f"mean={row['mean']:+.4f} std={row['std']:.4f} "
                 f"CI95=[{row['ci_low']:+.4f}, {row['ci_high']:+.4f}]"
             )
-        print("== 显著性：Wilcoxon signed-rank vs 参照 + Holm 校正 ==")
+        print("== significance: Wilcoxon signed-rank vs reference, Holm-corrected ==")
         for row in sig_rows:
             mean_diff = row.get("mean_diff")
             mean_txt = "n/a" if mean_diff is None else f"{mean_diff:+.4f}"
@@ -880,7 +761,7 @@ def cmd_stats(args: argparse.Namespace) -> int:
                 f"sig={row['significant']}"
             )
         print(f"→ {paths['seed_csv']}\n→ {paths['significance_csv']}")
-    LOGGER.info("stats 完成")
+    LOGGER.info("stats finished")
     return 0
 
 
@@ -894,10 +775,10 @@ def cmd_figures(args: argparse.Namespace) -> int:
     out_dir = Path(args.out) if args.out else (io_paths.RESULTS_ROOT / "figures")
     figures = make_all_figures(frame, out_dir=out_dir, smoke=args.smoke)
     if not args.quiet:
-        print(f"生成 {len(figures)} 张图 → {out_dir}")
+        print(f"wrote {len(figures)} figures -> {out_dir}")
         for item in figures:
             print(f"  {item['name']}: png={item['size_png']}B  pdf={item['pdf']}")
-    LOGGER.info("figures 完成：%d 张", len(figures))
+    LOGGER.info("figures finished: %d", len(figures))
     return 0
 
 
@@ -911,7 +792,6 @@ def cmd_verify(args: argparse.Namespace) -> int:
     specs = _load_graph_registry()
     grids = [float(c) for c in DEFAULT_C_GRID]
 
-    # ---- 1. fingerprints vs the pinned (N, M, duplicates) ------------------ #
     loaded: dict[str, nx.Graph] = {}
     fp_ok = True
     for spec in specs:
@@ -923,9 +803,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
             fp_ok = False
             continue
         loaded[dataset] = graph
-    record("fingerprint:all", fp_ok, f"{len(loaded)}/{len(specs)} 张图通过")
+    record("fingerprint:all", fp_ok, f"{len(loaded)}/{len(specs)} graphs passed")
 
-    # ---- 2. idempotent normalisation -------------------------------------- #
     idempotent = True
     for spec in specs:
         graph = load_graph(spec["path"])
@@ -934,7 +813,6 @@ def cmd_verify(args: argparse.Namespace) -> int:
             idempotent = False
     record("idempotent:all", idempotent)
 
-    # ---- 3. Σk == 2M over 9 graphs × 12 c values --------------------------- #
     conservation_ok = True
     combos = 0
     for spec in specs:
@@ -952,12 +830,11 @@ def cmd_verify(args: argparse.Namespace) -> int:
             except DegreeSequenceError as exc:
                 conservation_ok = False
                 LOGGER.error("%s c=%s: %s", spec["dataset"], c, exc)
-    record("conservation:Σk=2M", conservation_ok, f"{combos} 组组合")
+    record("conservation:Σk=2M", conservation_ok, f"{combos} combinations")
 
-    # ---- 4. nine-graph golden table at c = 1.6 ---------------------------- #
     c_value = args.c
     golden_header = (
-        "图", "N", "M", "c*", "c_norm", "k_max", "k_low", "r", "度值集合",
+        "dataset", "N", "M", "c*", "c_norm", "k_max", "k_low", "r", "degrees",
         "kappa", "D", "L", "repairs", "rw", "conn", "sha256",
     )
     golden_rows: list[list[Any]] = []
@@ -997,7 +874,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
             kappa_ok = False
             record(
                 f"kappa:{dataset}", False,
-                f"实测 {diagnostics.kappa:.4f} != 金标准 {expected_kappa:.4f}",
+                f"measured {diagnostics.kappa:.4f} != pinned {expected_kappa:.4f}",
             )
 
         band = _DISTANCE_BANDS.get(dataset)
@@ -1041,7 +918,6 @@ def cmd_verify(args: argparse.Namespace) -> int:
     record("golden:kappa_4dp", kappa_ok)
     record("golden:distance_bands", distance_ok)
 
-    # ---- 5. determinism: rebuild with the same seed ------------------------ #
     determinism_ok = True
     for spec in specs[:2]:
         dataset = str(spec["dataset"])
@@ -1058,9 +934,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
             record(f"determinism:{dataset}", False)
     record("determinism:same_seed_same_graph", determinism_ok)
 
-    # ---- 6. degenerate rollback ------------------------------------------- #
     degenerate_ok = False
-    detail = "未找到可触发退化的图"
+    detail = "no graph triggered a downgrade"
     for dataset, c_probe in (("Cogentco", 1.0), ("Colt", 1.0)):
         source = loaded.get(dataset)
         if source is None:
@@ -1074,13 +949,6 @@ def cmd_verify(args: argparse.Namespace) -> int:
             break
     record("degenerate:rollback_conserves", degenerate_ok, detail)
 
-    # ---- 7. the n-1 ceiling is *flagged*, never silently truncated --------- #
-    # The flag must agree with the arithmetic for every (graph, c) pair.  Note
-    # that "c >= 20 implies capped" is measurable only on BA-100 (k_bar = 5.82,
-    # so 20 * 5.82 = 116 > 99); on the other eight graphs c = 50 still stays
-    # below n - 1 (e.g. BA-300: 50 * 5.94 = 297 < 299).  Asserting the
-    # implication globally would be wrong, so the check is (a) flag/arith
-    # consistency everywhere and (b) BA-100 capped at c in {20, 50}.
     capped_ok = True
     for spec in specs:
         source = loaded.get(str(spec["dataset"]))
@@ -1092,9 +960,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
                     source.number_of_nodes(), source.number_of_edges(), c=c
                 )
             except DegreeSequenceError as exc:
-                # An inadmissible (graph, c) pair (e.g. the N=100 degenerate
-                # boundary) must not abort the whole verification sweep.
-                LOGGER.warning("%s c=%s 越界跳过：%s", spec["dataset"], c, exc)
+                LOGGER.warning("%s c=%s out of range, skipped: %s", spec["dataset"], c, exc)
                 continue
             if plan.capped_at_n_minus_1 != (plan.k_max == plan.n - 1):
                 capped_ok = False
@@ -1114,7 +980,6 @@ def cmd_verify(args: argparse.Namespace) -> int:
                 record(f"capped:BA-100@c={c}", False, f"k_max={plan.k_max}")
     record("capped:BA-100@c>=20_touches_n_minus_1", ba100_ok)
 
-    # ---- 8. c monotonicity ------------------------------------------------- #
     monotone_ok = True
     for spec in specs:
         source = loaded.get(str(spec["dataset"]))
@@ -1127,7 +992,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
                     source.number_of_nodes(), source.number_of_edges(), c=c
                 )
             except DegreeSequenceError as exc:
-                LOGGER.warning("%s c=%s 越界跳过：%s", spec["dataset"], c, exc)
+                LOGGER.warning("%s c=%s out of range, skipped: %s", spec["dataset"], c, exc)
                 continue
             if plan.k_max < previous:
                 monotone_ok = False
@@ -1135,7 +1000,6 @@ def cmd_verify(args: argparse.Namespace) -> int:
             previous = plan.k_max
     record("monotone:k_max_nondecreasing_in_c", monotone_ok)
 
-    # ---- 9. capacity contract: per graph, never just BA-100 ---------- #
     capacity_ok = True
     for dataset, expected in _GOLDEN_CAPACITY.items():
         source = loaded.get(dataset)
@@ -1151,7 +1015,6 @@ def cmd_verify(args: argparse.Namespace) -> int:
             record(f"capacity:{dataset}", False, f"{observed} != {expected}")
     record("capacity:(n_c,C,total,slack)_per_graph", capacity_ok)
 
-    # ---- 10. the utilisation probe: three quantities, none conflated ------ #
     probe_ok = True
     probe_summary: list[str] = []
     for dataset in _GOLDEN_CAPACITY:
@@ -1168,40 +1031,35 @@ def cmd_verify(args: argparse.Namespace) -> int:
         probe = probe_max_utilisation(result.graph, controllers, model)
         if sum(probe.loads_nearest) + probe.n_unassigned != model.n_switches:
             probe_ok = False
-            record(f"probe:{dataset}", False, "Σ L_j + 未指派 != 交换节点数")
-        # 硬要求：指派后的利用率必须 <= 1；聚合可行时不允许出现顺延失败。
+            record(f"probe:{dataset}", False, "sum L_j + unassigned != switch count")
         if probe.u_after_spill > 1.0 + 1e-9:
             probe_ok = False
-            record(f"probe:{dataset}", False, "顺延后仍超载")
+            record(f"probe:{dataset}", False, "still overloaded after the spill")
         if probe.feasible and probe.n_unassigned:
             probe_ok = False
-            record(f"probe:{dataset}", False, "聚合可行却有节点未指派")
+            record(f"probe:{dataset}", False, "aggregate feasible but nodes left unassigned")
         if probe.capacity_binds != (not probe.feasible):
             probe_ok = False
-            record(f"probe:{dataset}", False, "capacity_binds 与 feasible 不一致")
-        # 两个概念必须分开：天花板活跃（有控制器正好满载）在九图全为 True，
-        # 而"容量绑定"（不可满足）在九图全为 False。合并二者正是口径错误的根源。
+            record(f"probe:{dataset}", False, "capacity_binds disagrees with feasible")
         if not probe.ceiling_active:
             probe_ok = False
-            record(f"probe:{dataset}", False, "顺延后无控制器满载，与 U_spill=1 矛盾")
+            record(f"probe:{dataset}", False, "no controller saturated after the spill, contradicts U_spill=1")
         if probe.ceiling_active == probe.capacity_binds:
             probe_ok = False
             record(f"probe:{dataset}", False,
-                   "ceiling_active 与 capacity_binds 同值，两个概念被混为一谈")
-        # 九图在 t=0 必须聚合可行（slack >= 60，这是可证的，不是观测巧合）。
+                   "ceiling_active and capacity_binds are the same flag, two concepts conflated")
         if not probe.feasible:
             probe_ok = False
             record(f"probe:{dataset}", False,
-                   f"t=0 却不可行：slack={model.aggregate_slack}")
+                   f"infeasible at t=0: slack={model.aggregate_slack}")
         probe_summary.append(
             f"{dataset}=U_near {probe.u_nearest:.2f}/U_spill {probe.u_after_spill:.2f}"
-            f"/{'可行' if probe.feasible else '不可行'}"
-            f"/满载{probe.n_at_ceiling}"
+            f"/{'feasible' if probe.feasible else 'infeasible'}"
+            f"/saturated {probe.n_at_ceiling}"
         )
     record("probe:u_nearest_vs_u_after_spill_vs_feasible", probe_ok,
            "; ".join(probe_summary))
 
-    # ---- 11. cascade audit identity --------------------------------- #
     cascade_ok = True
     for dataset in ("BA-100", "Cogentco", "Colt"):
         source = loaded.get(dataset)
@@ -1224,11 +1082,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
                 record(f"cascade:{dataset}:{mode}", False)
             if abs(trace.final_fraction - 1.0) > 1e-12:
                 cascade_ok = False
-                record(f"cascade:{dataset}:{mode}", False, "全序列未打到 f=1")
-    record("cascade:audit_identity_每步成立", cascade_ok)
+                record(f"cascade:{dataset}:{mode}", False, "the sequence never reaches f=1")
+    record("cascade:audit_identity_every_step", cascade_ok)
 
-    # ---- 12. capacity feasibility over the attack ------------------ #
-    # t=0 必须聚合可行；否则"容量是否绑定"这个问题本身就被问错了。
     feasibility_ok = True
     feasibility_summary: list[str] = []
     for dataset in ("BA-100", "Colt"):
@@ -1253,8 +1109,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
             )
             if not curve.points[0].feasible:
                 feasibility_ok = False
-                record(f"feasibility:{dataset}:{method}", False, "t=0 却不可行")
-            # 有不可行状态 ⇒ 必须能报到"首次持续不可行"，否则统计口径有洞。
+                record(f"feasibility:{dataset}:{method}", False, "infeasible at t=0")
             ever_infeasible = any(
                 not point.feasible for point in curve.points if point.non_trivial
             )
@@ -1262,43 +1117,35 @@ def cmd_verify(args: argparse.Namespace) -> int:
                 feasibility_ok = False
                 record(
                     f"feasibility:{dataset}:{method}", False,
-                    "存在不可行状态却报不出首次持续不可行",
+                    "infeasible states exist but no persistent onset is reported",
                 )
-            # 定向攻击：密度地板与实测起跳点必须落在同一档（理论即机制）。
             if method in ("degree", "controllers"):
                 if curve.first_infeasible_f is None:
                     feasibility_ok = False
                     record(f"feasibility:{dataset}:{method}", False,
-                           "定向攻击却从未不可行")
+                           "targeted attack never becomes infeasible")
                 elif curve.f_density_floor is not None and abs(
                     curve.first_infeasible_f - curve.f_density_floor
                 ) > 1e-12:
                     feasibility_ok = False
                     record(
                         f"feasibility:{dataset}:{method}", False,
-                        f"起跳点 {curve.first_infeasible_f:.3f} 与密度地板 "
-                        f"{curve.f_density_floor:.3f} 不一致",
+                        f"onset {curve.first_infeasible_f:.3f} disagrees with the density floor "
+                        f"{curve.f_density_floor:.3f}",
                     )
-            # 随机攻击：控制器与被攻击节点同比例消失，密度守在 1/(C+1) 之上，
-            # 因此不允许出现"持续不可行"。
             if method == "random" and curve.first_persistent_infeasible_f is not None:
                 feasibility_ok = False
                 record(
                     f"feasibility:{dataset}:{method}", False,
-                    f"随机攻击竟在 f={curve.first_persistent_infeasible_f:.3f} 持续不可行",
+                    f"random attack is persistently infeasible from f={curve.first_persistent_infeasible_f:.3f}",
                 )
             feasibility_summary.append(
                 f"{dataset}/{method}:"
                 f"{'—' if curve.first_persistent_infeasible_f is None else f'{curve.first_persistent_infeasible_f:.3f}'}"
             )
-    record("feasibility:t0_可行且首次不可行可测", feasibility_ok,
-           "首次持续不可行 f: " + ", ".join(feasibility_summary))
+    record("feasibility:t0_feasible_and_onset_measurable", feasibility_ok,
+           "first persistent infeasibility f: " + ", ".join(feasibility_summary))
 
-    # ---- 13. the onset table: f* and the extra death it causes ----- #
-    # f* alone is a threshold with no consequence attached; the record pairs it
-    # with the extra death measured against `structural` mode on the same
-    # sequence.  Both are produced by `onset_records`, the same function the
-    # `feasibility` subcommand writes to `results/onset.{json,txt}`.
     onset_ok = True
     onset_summary: list[str] = []
     structural_curves: list[Any] = []
@@ -1329,20 +1176,20 @@ def cmd_verify(args: argparse.Namespace) -> int:
     for onset in onset_records(structural_curves, capacity_curves):
         if not onset.feasible_at_t0:
             onset_ok = False
-            record(f"onset:{onset.dataset}", False, "t=0 却不可行")
+            record(f"onset:{onset.dataset}", False, "infeasible at t=0")
         if not (onset.onset_matches_floor and onset.onset_is_persistent):
             onset_ok = False
             record(f"onset:{onset.dataset}", False,
-                   f"f*={onset.f_star} 与地板 {onset.f_floor} 不一致或不持续")
+                   f"f*={onset.f_star} does not match the floor {onset.f_floor}, or is not persistent")
         if onset.extra_dead_at_onset <= 0:
             onset_ok = False
             record(f"onset:{onset.dataset}", False,
-                   "起跳点没有产生任何额外死亡，容量机制没有后果")
+                   "the onset causes no extra death, so the capacity mechanism has no consequence")
         onset_summary.append(
             f"{onset.dataset}=f*{onset.f_star:.3f}"
             f"/+{onset.extra_dead_at_onset}→{onset.extra_dead_after_onset}"
         )
-    record("onset:f_星与过载级联额外死亡", onset_ok, "; ".join(onset_summary))
+    record("onset:f_star_and_extra_death", onset_ok, "; ".join(onset_summary))
 
 
     sys.stdout.write(f"BiT-HyRL verify — c={c_value}, seed={args.seed}{_GOLDEN_MONO}\n\n")
@@ -1356,254 +1203,255 @@ def cmd_verify(args: argparse.Namespace) -> int:
     failures = [name for name, ok, _ in checks if not ok]
     sys.stdout.write("\n")
     if failures:
-        sys.stdout.write(f"IS_PASS: NO — 失败项 {failures}\n")
+        sys.stdout.write(f"IS_PASS: NO - failed checks {failures}\n")
         return 1
-    sys.stdout.write("IS_PASS: YES — 所有硬校验通过\n")
+    sys.stdout.write("IS_PASS: YES - all hard checks passed\n")
     return 0
 
 
-# --------------------------------------------------------------------------- #
-# parser
-# --------------------------------------------------------------------------- #
 def build_parser() -> argparse.ArgumentParser:
     """Build the full argument parser for ``python -m bit_hyrl``."""
     parser = argparse.ArgumentParser(
         prog="bit_hyrl",
-        description="BiT-HyRL 单一命令行入口（BiT / Hy / RL 三层）",
+        description="BiT-HyRL command line entry point (BiT / Hy / RL)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--version", action="version", version=f"bit_hyrl {VERSION}")
     parser.add_argument(
         "--log-level", default="INFO",
-        choices=("DEBUG", "INFO", "WARNING", "ERROR"), help="日志级别",
+        choices=("DEBUG", "INFO", "WARNING", "ERROR"), help="log level",
     )
     subparsers = parser.add_subparsers(dest="command", metavar="<command>")
 
-    p_fp = subparsers.add_parser("fingerprint", help="容错读取并输出九图指纹")
-    p_fp.add_argument("--graphs", default=None, help="图清单 JSON（默认 configs/graphs.json）")
-    p_fp.add_argument("--write", action="store_true", help="写入 results/fingerprints/")
-    p_fp.add_argument("--quiet", action="store_true", help="不打印 JSON")
+    p_fp = subparsers.add_parser("fingerprint", help="read every pinned graph and print its fingerprint")
+    p_fp.add_argument("--graphs", default=None, help="graph registry JSON (default configs/graphs.json)")
+    p_fp.add_argument("--write", action="store_true", help="write to results/fingerprints/")
+    p_fp.add_argument("--quiet", action="store_true", help="do not print JSON")
     p_fp.set_defaults(func=cmd_fingerprint)
 
-    p_construct = subparsers.add_parser("construct", help="构造一张 BiT 图并输出诊断")
-    p_construct.add_argument("--dataset", required=True, help="数据集名，如 BA-100")
+    p_construct = subparsers.add_parser("construct", help="construct one BiT graph and print its diagnostics")
+    p_construct.add_argument("--dataset", required=True, help="dataset name, e.g. BA-100")
     p_construct.add_argument("--c", type=float, default=1.6, help="hub factor c")
-    p_construct.add_argument("--h", type=int, default=1, help="hub 个数")
-    p_construct.add_argument("--seed", type=int, default=0, help="根种子")
+    p_construct.add_argument("--h", type=int, default=1, help="number of hubs")
+    p_construct.add_argument("--seed", type=int, default=0, help="root seed")
     p_construct.add_argument(
         "--realize", default="hh+rewire", choices=("hh", "hh+rewire"),
-        help="实现模式：hh+rewire（默认，去相关）或 hh（纯 HH，对照用）",
+        help="realisation mode: hh+rewire (default) or hh (plain Havel-Hakimi)",
     )
     p_construct.add_argument(
         "--rewire-swaps", type=int, default=None,
-        help="去相关 2-switch 预算（默认 10*m；0 等价于 --realize hh）",
+        help="2-switch budget for decorrelation (default 10*m; 0 means --realize hh)",
     )
-    p_construct.add_argument("--betweenness", action="store_true", help="额外计算介数 BC 诊断")
-    p_construct.add_argument("--max-repair-swaps", type=int, default=20000, help="连通修复 swap 预算")
-    p_construct.add_argument("--allow-disconnected", action="store_true", help="允许不连通（不修复）")
-    p_construct.add_argument("--write", action="store_true", help="写入 results/construct/")
-    p_construct.add_argument("--quiet", action="store_true", help="不打印 JSON")
+    p_construct.add_argument("--betweenness", action="store_true", help="also compute the betweenness diagnostic")
+    p_construct.add_argument("--max-repair-swaps", type=int, default=20000, help="swap budget for connectivity repair")
+    p_construct.add_argument("--allow-disconnected", action="store_true", help="allow a disconnected result")
+    p_construct.add_argument("--write", action="store_true", help="write to results/construct/")
+    p_construct.add_argument("--quiet", action="store_true", help="do not print JSON")
     p_construct.set_defaults(func=cmd_construct)
 
     p_probe = subparsers.add_parser(
-        "probe", help="容量模型 + 利用率探针（只算不删）"
+        "probe", help="capacity model and utilisation probe (nothing is removed)"
     )
-    p_probe.add_argument("--dataset", required=True, help="数据集名，如 BA-100")
+    p_probe.add_argument("--dataset", required=True, help="dataset name, e.g. BA-100")
     p_probe.add_argument("--c", type=float, default=1.6, help="hub factor c")
-    p_probe.add_argument("--h", type=int, default=1, help="hub 个数")
-    p_probe.add_argument("--seed", type=int, default=0, help="根种子")
+    p_probe.add_argument("--h", type=int, default=1, help="number of hubs")
+    p_probe.add_argument("--seed", type=int, default=0, help="root seed")
     p_probe.add_argument("--realize", default="hh+rewire", choices=("hh", "hh+rewire"),
-                         help="实现模式")
+                         help="realisation mode")
     p_probe.add_argument("--rewire-swaps", type=int, default=None,
-                         help="去相关 2-switch 预算（默认 10*m，与库默认一致）")
-    p_probe.add_argument("--write", action="store_true", help="写入 results/probe/")
-    p_probe.add_argument("--quiet", action="store_true", help="不打印 JSON")
+                         help="2-switch budget for decorrelation (default 10*m)")
+    p_probe.add_argument("--write", action="store_true", help="write to results/probe/")
+    p_probe.add_argument("--quiet", action="store_true", help="do not print JSON")
     p_probe.set_defaults(func=cmd_probe)
 
-    p_sweep = subparsers.add_parser("sweep-c", help="c 敏感性扫描")
-    p_sweep.add_argument("--dataset", default="all", help="数据集名或 all")
+    p_sweep = subparsers.add_parser("sweep-c", help="sensitivity sweep over c")
+    p_sweep.add_argument("--dataset", default="all", help="dataset name or all")
     p_sweep.add_argument("--grid", default=None,
-                         help="None=默认网格；或逗号分隔的数值列表（按 --grid-kind 解释）")
+                         help="None for the default grid, or a comma-separated list read according to --grid-kind")
     p_sweep.add_argument(
         "--grid-kind", default="c", choices=("c", "c_norm"),
-        help="c=原始 c 的 12 档（设计文档口径）；c_norm=归一化 11 档（受控对照，推荐）",
+        help="c: twelve values of the raw c; c_norm: eleven values normalised by c*",
     )
-    p_sweep.add_argument("--h", type=int, default=1, help="hub 个数")
-    p_sweep.add_argument("--seed", type=int, default=0, help="根种子")
+    p_sweep.add_argument("--h", type=int, default=1, help="number of hubs")
+    p_sweep.add_argument("--seed", type=int, default=0, help="root seed")
     p_sweep.add_argument("--realize", default="hh+rewire", choices=("hh", "hh+rewire"),
-                         help="实现模式")
+                         help="realisation mode")
     p_sweep.add_argument("--rewire-swaps", type=int, default=None,
-                         help="去相关 2-switch 预算（默认 10*m）")
-    p_sweep.add_argument("--plan-only", action="store_true", help="只解度序列，不建图（快）")
-    p_sweep.add_argument("--write", action="store_true", help="写入 results/sweep/<dataset>/")
-    p_sweep.add_argument("--quiet", action="store_true", help="不打印 JSON")
+                         help="2-switch budget for decorrelation (default 10*m)")
+    p_sweep.add_argument("--plan-only", action="store_true", help="solve the degree sequence only, no graph")
+    p_sweep.add_argument("--write", action="store_true", help="write to results/sweep/<dataset>/")
+    p_sweep.add_argument("--quiet", action="store_true", help="do not print JSON")
     p_sweep.set_defaults(func=cmd_sweep_c)
 
-    p_feas = subparsers.add_parser
-    p_feas.add_argument("--dataset", default="all", help="数据集名或 all")
+    p_feas = subparsers.add_parser(
+        "feasibility", help="capacity feasibility along every attack sequence"
+    )
+    p_feas.add_argument("--dataset", default="all", help="dataset name or all")
     p_feas.add_argument("--attack", default="all",
-                        help=f"攻击方法或 all；可选 {list(PROVISIONAL_ATTACK_METHODS)}")
+                        help=f"attack method or all; one of {list(PROVISIONAL_ATTACK_METHODS)}")
     p_feas.add_argument("--mode", default="structural", choices=("structural", "capacity"),
-                        help="级联模式（默认 structural，与已发表口径一致）")
-    p_feas.add_argument("--max-iter", type=int, default=50, help="capacity 模式的不动点上限")
+                        help="cascade mode (default structural, as published)")
+    p_feas.add_argument("--max-iter", type=int, default=50, help="fixed-point cap for capacity mode")
     p_feas.add_argument("--c", type=float, default=1.6, help="hub factor c")
-    p_feas.add_argument("--h", type=int, default=1, help="hub 个数")
-    p_feas.add_argument("--seed", type=int, default=0, help="根种子")
+    p_feas.add_argument("--h", type=int, default=1, help="number of hubs")
+    p_feas.add_argument("--seed", type=int, default=0, help="root seed")
     p_feas.add_argument("--realize", default="hh+rewire", choices=("hh", "hh+rewire"),
-                        help="实现模式")
+                        help="realisation mode")
     p_feas.add_argument("--rewire-swaps", type=int, default=None,
-                        help="去相关 2-switch 预算（默认 10*m）")
-    p_feas.add_argument("--write", action="store_true", help="写入 results/feasibility/")
-    p_feas.add_argument("--quiet", action="store_true", help="不打印表")
+                        help="2-switch budget for decorrelation (default 10*m)")
+    p_feas.add_argument("--write", action="store_true", help="write to results/feasibility/")
+    p_feas.add_argument("--quiet", action="store_true", help="do not print the tables")
     p_feas.set_defaults(func=cmd_feasibility)
 
-    p_verify = subparsers.add_parser("verify", help="一次性跑完所有硬校验（金标准 + 不变量）")
-    p_verify.add_argument("--all", action="store_true", help="保留参数，verify 恒跑全部")
-    p_verify.add_argument("--c", type=float, default=1.6, help="金标准对照所用的 c")
-    p_verify.add_argument("--seed", type=int, default=0, help="根种子")
+    p_verify = subparsers.add_parser("verify", help="run every hard check in one pass (pinned values and invariants)")
+    p_verify.add_argument("--all", action="store_true", help="kept for compatibility; verify always runs everything")
+    p_verify.add_argument("--c", type=float, default=1.6, help="c used for the pinned comparison")
+    p_verify.add_argument("--seed", type=int, default=0, help="root seed")
     p_verify.add_argument("--realize", default="hh+rewire", choices=("hh", "hh+rewire"),
-                          help="实现模式")
+                          help="realisation mode")
     p_verify.add_argument("--rewire-swaps", type=int, default=None,
-                          help="去相关 2-switch 预算（默认 10*m，与库默认一致）")
+                          help="2-switch budget for decorrelation (default 10*m)")
     p_verify.set_defaults(func=cmd_verify)
 
-    p_eval = subparsers.add_parser
-    p_eval.add_argument("--dataset", default="all", help="数据集名或 all")
+    p_eval = subparsers.add_parser(
+        "eval", help="evaluate the original and reconstructed topologies"
+    )
+    p_eval.add_argument("--dataset", default="all", help="dataset name or all")
     p_eval.add_argument(
         "--topology", default="both", choices=("original", "bit", "both"),
-        help="拓扑来源：original=载入原图；bit=由 (N,M) 重建；both=两者都跑并对账",
+        help="topology source: original (load), bit (rebuild from N, M) or both",
     )
-    p_eval.add_argument("--c", type=float, default=1.6, help="hub factor c（仅 bit 拓扑使用）")
-    p_eval.add_argument("--h", type=int, default=1, help="hub 个数")
-    p_eval.add_argument("--seed", type=int, default=0, help="根种子")
+    p_eval.add_argument("--c", type=float, default=1.6, help="hub factor c (bit topology only)")
+    p_eval.add_argument("--h", type=int, default=1, help="number of hubs")
+    p_eval.add_argument("--seed", type=int, default=0, help="root seed")
     p_eval.add_argument(
         "--attack", default="degree",
-        help=f"攻击方法或 all；可选 {list(PROVISIONAL_ATTACK_METHODS)}",
+        help=f"attack method or all; one of {list(PROVISIONAL_ATTACK_METHODS)}",
     )
     p_eval.add_argument("--mode", default="structural", choices=("structural", "capacity"),
-                        help="级联模式（默认 structural，与已发表口径一致）")
+                        help="cascade mode (default structural, as published)")
     p_eval.add_argument("--realize", default="hh+rewire", choices=("hh", "hh+rewire"),
-                        help="bit 拓扑的实现模式")
+                        help="realisation mode of the bit topology")
     p_eval.add_argument("--rewire-swaps", type=int, default=None,
-                        help="去相关 2-switch 预算（默认 10*m）")
-    p_eval.add_argument("--write", action="store_true", help="写入 results/records/")
+                        help="2-switch budget for decorrelation (default 10*m)")
+    p_eval.add_argument("--write", action="store_true", help="write to results/records/")
     p_eval.add_argument(
         "--policy", default="degree_ranked", choices=("degree_ranked", "ppo"),
-        help="控制器放置策略：degree_ranked（基线）或 ppo（需 --checkpoint）",
+        help="placement policy: degree_ranked (baseline) or ppo (needs --checkpoint)",
     )
-    p_eval.add_argument("--checkpoint", default=None, help="PPO 检查点路径（--policy ppo 时必填）")
-    p_eval.add_argument("--quiet", action="store_true", help="不打印对账行")
+    p_eval.add_argument("--checkpoint", default=None, help="PPO checkpoint path (required with --policy ppo)")
+    p_eval.add_argument("--quiet", action="store_true", help="do not print the reconciliation lines")
     p_eval.set_defaults(func=cmd_eval)
 
     p_train = subparsers.add_parser(
-        "train", help="PPO 训练控制器放置策略（T10）"
+        "train", help="train the PPO placement policy"
     )
     p_train.add_argument(
-        "--dataset", default="all", help="数据集名，逗号分隔多个，或 all"
+        "--dataset", default="all", help="dataset name, comma-separated list, or all"
     )
     p_train.add_argument("--split", default=None,
-                         help="在 splits.json 的 train 上训练、val 上早停（如 configs/splits.json）")
-    p_train.add_argument("--iterations", type=int, default=200, help="外层次数（论文表4）")
-    p_train.add_argument("--episodes", type=int, default=8, help="每迭代 rollout episode 数（论文表4）")
-    p_train.add_argument("--lr", type=float, default=1e-4, help="Adam 学习率（论文表4=1e-4）")
-    p_train.add_argument("--gamma", type=float, default=0.99, help="折扣因子（论文表4=0.99）")
-    p_train.add_argument("--patience", type=int, default=20, help="val 早停 patience（0=关）")
-    p_train.add_argument("--eval-sample", type=int, default=20, help="val 评估子集大小")
-    p_train.add_argument("--seed", type=int, default=0, help="根种子")
-    p_train.add_argument("--out", default=None, help="检查点输出路径（默认 results/checkpoints/）")
+                         help="train on the train split and early-stop on val (e.g. configs/splits.json)")
+    p_train.add_argument("--iterations", type=int, default=200, help="outer iterations")
+    p_train.add_argument("--episodes", type=int, default=8, help="rollout episodes per iteration")
+    p_train.add_argument("--lr", type=float, default=1e-4, help="Adam learning rate")
+    p_train.add_argument("--gamma", type=float, default=0.99, help="discount factor")
+    p_train.add_argument("--patience", type=int, default=20, help="early-stop patience on val (0 disables)")
+    p_train.add_argument("--eval-sample", type=int, default=20, help="size of the val evaluation subset")
+    p_train.add_argument("--seed", type=int, default=0, help="root seed")
+    p_train.add_argument("--out", default=None, help="checkpoint output path (default results/checkpoints/)")
     p_train.add_argument(
-        "--smoke", action="store_true", help="冒烟：iterations≤2、episodes≤2、train/val 各取前 4 张"
+        "--smoke", action="store_true", help="smoke run: at most 2 iterations, 2 episodes, 4 graphs per split"
     )
-    p_train.add_argument("--quiet", action="store_true", help="不打印每迭代奖励")
+    p_train.add_argument("--quiet", action="store_true", help="do not print the reward per iteration")
     p_train.set_defaults(func=cmd_train)
 
     p_transfer = subparsers.add_parser(
-        "transfer", help="零样本迁移：用已训练策略在新图上放置控制器（T10）"
+        "transfer", help="zero-shot transfer: place controllers on a new graph"
     )
-    p_transfer.add_argument("--dataset", required=True, help="目标数据集名，如 ER-100")
-    p_transfer.add_argument("--checkpoint", required=True, help="已训练检查点路径")
-    p_transfer.add_argument("--seed", type=int, default=0, help="根种子（保留参数）")
-    p_transfer.add_argument("--out", default=None, help="把结果 JSON 写到该路径")
-    p_transfer.add_argument("--quiet", action="store_true", help="不打印控制器集合")
+    p_transfer.add_argument("--dataset", required=True, help="target dataset name, e.g. ER-100")
+    p_transfer.add_argument("--checkpoint", required=True, help="trained checkpoint path")
+    p_transfer.add_argument("--seed", type=int, default=0, help="root seed (kept for compatibility)")
+    p_transfer.add_argument("--out", default=None, help="write the result JSON to this path")
+    p_transfer.add_argument("--quiet", action="store_true", help="do not print the controller set")
     p_transfer.set_defaults(func=cmd_transfer)
 
-    p_ablate = subparsers.add_parser("ablate", help="2x2 消融：拓扑×放置（T11）")
-    p_ablate.add_argument("--dataset", default="all", help="数据集名或逗号列表或 all")
-    p_ablate.add_argument("--checkpoint", default=None, help="PPO 检查点（ppo 放置所需）")
-    p_ablate.add_argument("--attacks", default="degree,random", help="逗号分隔攻击方法")
+    p_ablate = subparsers.add_parser("ablate", help="2x2 ablation: topology x placement")
+    p_ablate.add_argument("--dataset", default="all", help="dataset name, comma-separated list, or all")
+    p_ablate.add_argument("--checkpoint", default=None, help="PPO checkpoint (needed for ppo placement)")
+    p_ablate.add_argument("--attacks", default="degree,random", help="comma-separated attack methods")
     p_ablate.add_argument("--mode", default="structural", choices=("structural", "capacity"))
-    p_ablate.add_argument("--seeds", default="0", help="逗号分隔种子")
+    p_ablate.add_argument("--seeds", default="0", help="comma-separated seeds")
     p_ablate.add_argument("--c", type=float, default=1.6, help="hub factor c")
-    p_ablate.add_argument("--h", type=int, default=1, help="hub 个数")
-    p_ablate.add_argument("--out", default=None, help="输出目录（默认 results/ablation）")
-    p_ablate.add_argument("--smoke", action="store_true", help="冒烟：只取 1 个 seed")
-    p_ablate.add_argument("--quiet", action="store_true", help="不打印 2×2 表")
+    p_ablate.add_argument("--h", type=int, default=1, help="number of hubs")
+    p_ablate.add_argument("--out", default=None, help="output directory (default results/ablation)")
+    p_ablate.add_argument("--smoke", action="store_true", help="smoke run: one seed only")
+    p_ablate.add_argument("--quiet", action="store_true", help="do not print the 2x2 table")
     p_ablate.set_defaults(func=cmd_ablate)
 
-    p_matrix = subparsers.add_parser("matrix", help="实验矩阵长表（T12）")
-    p_matrix.add_argument("--dataset", default="all", help="数据集名或逗号列表或 all")
-    p_matrix.add_argument("--policies", default="degree_ranked,ppo", help="逗号分隔策略")
-    p_matrix.add_argument("--topologies", default="original,bit", help="逗号分隔拓扑")
-    p_matrix.add_argument("--attacks", default="degree,random", help="逗号分隔攻击")
-    p_matrix.add_argument("--modes", default="structural", help="逗号分隔级联模式")
-    p_matrix.add_argument("--seeds", default="0", help="逗号分隔种子")
-    p_matrix.add_argument("--checkpoint", default=None, help="PPO 检查点")
+    p_matrix = subparsers.add_parser("matrix", help="long-form experiment matrix")
+    p_matrix.add_argument("--dataset", default="all", help="dataset name, comma-separated list, or all")
+    p_matrix.add_argument("--policies", default="degree_ranked,ppo", help="comma-separated policies")
+    p_matrix.add_argument("--topologies", default="original,bit", help="comma-separated topologies")
+    p_matrix.add_argument("--attacks", default="degree,random", help="comma-separated attacks")
+    p_matrix.add_argument("--modes", default="structural", help="comma-separated cascade modes")
+    p_matrix.add_argument("--seeds", default="0", help="comma-separated seeds")
+    p_matrix.add_argument("--checkpoint", default=None, help="PPO checkpoint")
     p_matrix.add_argument("--c", type=float, default=1.6, help="hub factor c")
-    p_matrix.add_argument("--h", type=int, default=1, help="hub 个数")
-    p_matrix.add_argument("--out", default=None, help="输出目录（默认 results/matrix）")
-    p_matrix.add_argument("--smoke", action="store_true", help="冒烟：只取 1 个 seed")
-    p_matrix.add_argument("--quiet", action="store_true", help="不打印行数")
+    p_matrix.add_argument("--h", type=int, default=1, help="number of hubs")
+    p_matrix.add_argument("--out", default=None, help="output directory (default results/matrix)")
+    p_matrix.add_argument("--smoke", action="store_true", help="smoke run: one seed only")
+    p_matrix.add_argument("--quiet", action="store_true", help="do not print the row count")
     p_matrix.set_defaults(func=cmd_matrix)
 
     p_mm = subparsers.add_parser(
-        "method-matrix", help="方法级矩阵：5 拓扑 baseline + Eff-R-Net + 2 放置代理 + BiT-HyRL（Task#4）"
+        "method-matrix", help="method-level matrix: five construction baselines, Eff-R-Net, two placement proxies and BiT-HyRL"
     )
-    p_mm.add_argument("--dataset", default="all", help="数据集名或逗号列表或 all")
-    p_mm.add_argument("--split", default=None, help="用 splits.json 的 test 列表")
-    p_mm.add_argument("--methods", default="", help="逗号分隔方法名；空=全部 METHODS")
-    p_mm.add_argument("--attacks", default="degree,random", help="逗号分隔攻击")
+    p_mm.add_argument("--dataset", default="all", help="dataset name, comma-separated list, or all")
+    p_mm.add_argument("--split", default=None, help="use the test list of splits.json")
+    p_mm.add_argument("--methods", default="", help="comma-separated method names; empty means all")
+    p_mm.add_argument("--attacks", default="degree,random", help="comma-separated attacks")
     p_mm.add_argument("--mode", default="structural", choices=("structural", "capacity"))
-    p_mm.add_argument("--seeds", default="0", help="逗号分隔种子")
-    p_mm.add_argument("--checkpoint", default=None, help="PPO 检查点（BiT-HyRL 放置需要）")
+    p_mm.add_argument("--seeds", default="0", help="comma-separated seeds")
+    p_mm.add_argument("--checkpoint", default=None, help="PPO checkpoint (needed for the BiT-HyRL placement)")
     p_mm.add_argument("--c", type=float, default=1.6, help="hub factor c")
-    p_mm.add_argument("--h", type=int, default=1, help="hub 个数")
+    p_mm.add_argument("--h", type=int, default=1, help="number of hubs")
     p_mm.add_argument(
         "--workers", type=int, default=1,
-        help="并行进程数；1=串行，建议 ≤ 物理核数",
+        help="worker processes; 1 runs serially",
     )
-    p_mm.add_argument("--out", default=None, help="输出目录（默认 results/method_matrix）")
+    p_mm.add_argument("--out", default=None, help="output directory (default results/method_matrix)")
     p_mm.add_argument(
         "--smoke", action="store_true",
-        help="冒烟：BA-100,ER-100 × {BiT-HyRL,ONION,UNITY,MWCL-sim,MADQN-sim} × 1 攻击 × 1 种子",
+        help="smoke run: two graphs, five methods, one attack, one seed",
     )
-    p_mm.add_argument("--quiet", action="store_true", help="不打印行数")
+    p_mm.add_argument("--quiet", action="store_true", help="do not print the row count")
     p_mm.set_defaults(func=cmd_method_matrix)
 
     p_ms = subparsers.add_parser(
-        "method-stats", help="方法间显著性：exact Wilcoxon + Holm（GCC/CSA/H_C），参照可切"
+        "method-stats", help="significance between methods: exact Wilcoxon with Holm correction"
     )
-    p_ms.add_argument("--in", dest="infile", required=True, help="method_matrix CSV 路径")
-    p_ms.add_argument("--reference", default="BiT-HyRL", help="参照方法（默认 BiT-HyRL）")
-    p_ms.add_argument("--out", default=None, help="输出 CSV（默认 results/method_matrix/significance.csv）")
-    p_ms.add_argument("--quiet", action="store_true", help="不打印")
+    p_ms.add_argument("--in", dest="infile", required=True, help="path to the method_matrix CSV")
+    p_ms.add_argument("--reference", default="BiT-HyRL", help="reference method (default BiT-HyRL)")
+    p_ms.add_argument("--out", default=None, help="output CSV (default results/method_matrix/significance.csv)")
+    p_ms.add_argument("--quiet", action="store_true", help="do not print")
     p_ms.set_defaults(func=cmd_method_stats)
 
-    p_stats = subparsers.add_parser("stats", help="配对统计：Wilcoxon + bootstrap CI（T12）")
-    p_stats.add_argument("--in", dest="infile", required=True, help="matrix CSV 路径")
-    p_stats.add_argument("--metric", default="auc_r", help="比较的指标列")
-    p_stats.add_argument("--out", default=None, help="输出目录（默认 results/stats）")
-    p_stats.add_argument("--quiet", action="store_true", help="不打印")
+    p_stats = subparsers.add_parser("stats", help="paired statistics: Wilcoxon and bootstrap CI")
+    p_stats.add_argument("--in", dest="infile", required=True, help="path to the matrix CSV")
+    p_stats.add_argument("--metric", default="auc_r", help="metric column to compare")
+    p_stats.add_argument("--out", default=None, help="output directory (default results/stats)")
+    p_stats.add_argument("--quiet", action="store_true", help="do not print")
     p_stats.set_defaults(func=cmd_stats)
 
-    p_figures = subparsers.add_parser("figures", help="出图：鲁棒曲线/消融/F10（T12）")
-    p_figures.add_argument("--in", dest="infile", required=True, help="matrix CSV 路径")
-    p_figures.add_argument("--out", default=None, help="输出目录（默认 results/figures）")
-    p_figures.add_argument("--smoke", action="store_true", help="保留参数")
-    p_figures.add_argument("--quiet", action="store_true", help="不打印文件清单")
+    p_figures = subparsers.add_parser("figures", help="draw the robustness, ablation and metric panels")
+    p_figures.add_argument("--in", dest="infile", required=True, help="path to the matrix CSV")
+    p_figures.add_argument("--out", default=None, help="output directory (default results/figures)")
+    p_figures.add_argument("--smoke", action="store_true", help="kept for compatibility")
+    p_figures.add_argument("--quiet", action="store_true", help="do not print the file list")
     p_figures.set_defaults(func=cmd_figures)
 
     for name, owner in _DEFERRED.items():
-        stub = subparsers.add_parser(name, help=f"待实现（{owner}）")
+        stub = subparsers.add_parser(name, help=f"not implemented yet ({owner})")
         stub.set_defaults(func=_make_stub(name, owner))
 
     return parser
@@ -1613,21 +1461,14 @@ def _make_stub(name: str, owner: str):
     """Create a deferred-command handler that fails loudly."""
 
     def _stub(_args: argparse.Namespace) -> int:
-        raise NotImplementedError(f"子命令 {name!r} 尚未实现，归属 {owner}")
+        raise NotImplementedError(f"sub-command {name!r} is not implemented yet ({owner})")
 
     _stub.__name__ = f"cmd_{name}_deferred"
     return _stub
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Entry point used by ``python -m bit_hyrl``.
-
-    Args:
-        argv: Argument list; defaults to ``sys.argv[1:]``.
-
-    Returns:
-        Process exit code.
-    """
+    """Entry point used by ``python -m bit_hyrl``."""
     parser = build_parser()
     args = parser.parse_args(argv)
     logging.basicConfig(

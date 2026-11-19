@@ -10,8 +10,6 @@ from network_dismantling.multiscale_entanglement.entanglement_functions import (
                                                                                 beta_small, beta_mid, beta_large)
 
 method_info = {
-    # "source": "",
-    # "authors": "",
     "citation": "Ghavasieh, A., Stella, M., Biamonte, J. et al. Unraveling the effects of multiscale network entanglement on empirical systems. Commun Phys 4, 129 (2021). https://doi.org/10.1038/s42005-021-00633-0",
 }
 
@@ -140,77 +138,3 @@ def network_entanglement_large_reinsertion(network: Graph,
 
     return predictions
 
-# def network_entanglement_reinsertion(network: Graph,
-#                              stop_condition: int,
-#                              entanglement_function: Callable,
-#                              logger: Logger = getLogger("dummy"),
-#                              **kwargs):
-#     from network_dismantling.multiscale_entanglement.reinsertion import reinsert
-#
-#     logger.debug(f"entanglement_function: {entanglement_function} kwargs: {kwargs}")
-#     run_info = entanglement_function(network=network,
-#                                      stop_condition=stop_condition,
-#                                      logger=logger,
-#                                      **kwargs)
-#
-#     removals = run_info["predictions"]
-#
-#     predictions = reinsert(
-#         network=network,
-#         removals=removals,
-#         stop_condition=stop_condition,
-#         logger=logger,
-#     )
-#
-#     return predictions
-#
-#
-# @dismantling_method(
-#     name=r"Small-scale Entanglement + Reinsertion",
-#     short_name=r"$\mathrm{NE}_s$ + R",
-#     **method_info,
-# )
-# @dismantler_wrapper
-# def network_entanglement_small_reinsertion(network: Graph,
-#                                    stop_condition: int,
-#                                    logger: Logger = getLogger("dummy"),
-#                                    **kwargs):
-#     return entanglement_reinsertion(network=network,
-#                                     stop_condition=stop_condition,
-#                                     entanglement_function=entanglement_small,
-#                                     logger=logger,
-#                                     **kwargs)
-#
-#
-# @dismantling_method(
-#     name=r"Mid-scale Entanglement + Reinsertion",
-#     short_name=r"$\mathrm{NE}_m$ + R",
-#     **method_info,
-# )
-# @dismantler_wrapper
-# def network_entanglement_mid_reinsertion(network: Graph,
-#                                  stop_condition: int,
-#                                  logger: Logger = getLogger("dummy"),
-#                                  **kwargs):
-#     return entanglement_reinsertion(network=network,
-#                                     stop_condition=stop_condition,
-#                                     entanglement_function=entanglement_mid,
-#                                     logger=logger,
-#                                     **kwargs)
-#
-#
-# @dismantling_method(
-#     name=r"Large-scale Entanglement + Reinsertion",
-#     short_name=r"$\mathrm{NE}_l$ + R",
-#     **method_info,
-# )
-# @dismantler_wrapper
-# def network_entanglement_large_reinsertion(network: Graph,
-#                                    stop_condition: int,
-#                                    logger: Logger = getLogger("dummy"),
-#                                    **kwargs):
-#     return entanglement_reinsertion(network=network,
-#                                     stop_condition=stop_condition,
-#                                     entanglement_function=entanglement_large,
-#                                     logger=logger,
-#                                     **kwargs)

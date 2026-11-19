@@ -97,9 +97,6 @@ def gnd_dismantle(G: nx.Graph, stop_condition: int, remove_strategy: int = 3,
                 x = y
             eigvec = x.copy()
         elif remove_strategy == 1:
-            # Weighted: operator B = WA + AW - A
-            # y_i = (d_i - 1) * sum_j A_ij x_j + sum_j A_ij d_j x_j + (d_max - db_i) x_i
-            # where db_i = d_i*(d_i-1) + sum_{j in N(i)} d_j
             db = degrees * (degrees - 1) + A @ degrees
             x = rng.normal(size=m)
             x -= x.mean()
@@ -166,9 +163,6 @@ def gnd_dismantle(G: nx.Graph, stop_condition: int, remove_strategy: int = 3,
         while remaining_edges:
             # Pick node according to strategy
             if remove_strategy == 3:
-                # Unweighted: argmax degree in cover graph -> remove largest-degree-first in original
-                # C++ vertex_cover picks min(1 / cover_degree), which is equivalent to max cover_degree
-                # But removal order is largest original degree first
                 best_u = max(cover_set, key=lambda u: gcc_degrees.get(u, 0))
             else:
                 # Weighted: argmin( gcc_degree / cover_degree )
@@ -185,9 +179,6 @@ def gnd_dismantle(G: nx.Graph, stop_condition: int, remove_strategy: int = 3,
             cover_degrees = {u: d for u, d in cover_degrees.items() if d > 0}
             cover_set = {u for u in cover_set if cover_degrees.get(u, 0) > 0}
         
-        # Remove nodes from H
-        # Strategy 3: remove largest current degree first
-        # Strategy 1: remove smallest current degree first
         if remove_strategy == 3:
             to_remove.sort(key=lambda u: H.degree(u), reverse=True)
         else:

@@ -78,8 +78,6 @@ class RolloutBuffer:
         values = np.array(self.values, dtype=np.float32)
         dones = np.array(self.dones, dtype=np.float32)
 
-        # Bootstrap from last value if episode didn't end
-        # For simplicity, we use 0 as bootstrap when done=True
         for t in reversed(range(T)):
             if t == T - 1:
                 next_value = 0.0 if dones[t] else 0.0  # no bootstrap from buffer

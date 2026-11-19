@@ -1,9 +1,8 @@
-"""ROMEN topology baseline — ported from ``network_construction/ROMEN/ROMEN.py``.
+"""ROMEN baseline: reinforcement-learning search over link additions.
 
-Logic copied in (``_romen_impl``); no import of the old tree.  Positions are
-supplied from node ``pos`` attributes or a locally-seeded generator (the original
-adapter used random positions ``* 1000``).  ROMEN's internal optimiser draws from the
-ambient RNG (torch), so runs are not bit-reproducible across processes.
+Positions come from node ``pos`` attributes or a locally seeded generator.  The
+optimiser draws from the ambient torch RNG, so runs are not bit-reproducible
+across processes.
 """
 
 from __future__ import annotations

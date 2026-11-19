@@ -1,7 +1,7 @@
-"""MWCL-sim placement proxy — ported from ``scripts/evaluate_physical_control_metrics.py``.
+"""MWCL-sim placement proxy.
 
-``select_mwcl_proxy``: a seeded-free k-center latency proxy for the MWCL objective.
-Honestly labelled ``-sim`` — it is a proxy, not the original method.
+``select_mwcl_proxy`` solves a k-center latency problem for the MWCL objective; the
+``-sim`` suffix marks it as a proxy rather than the original method.
 """
 
 from __future__ import annotations

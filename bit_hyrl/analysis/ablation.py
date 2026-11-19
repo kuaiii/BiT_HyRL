@@ -1,17 +1,4 @@
-"""2x2 ablation: topology (original/bit) x placement (degree_ranked/ppo) (T11).
-
-The central question of the paper is whether the BiT topology change and the RL
-placement change are **separable** — i.e. whether the interaction term is zero.
-Each cell is the mean ``auc_r`` of the robustness curve over ``attack x seed``;
-the three reported effects are
-
-* **topology**   = mean(bit, .) - mean(original, .)
-* **policy**     = mean(., ppo) - mean(., degree_ranked)
-* **interaction**= (bit,ppo - bit,degree) - (original,ppo - original,degree)
-
-computed per graph and then averaged across graphs.  The interaction is reported
-*as measured* — the paper expects ~0, but this module never rounds it to zero.
-"""
+"""2x2 ablation: topology (original / BiT) x placement (degree ranked / PPO)."""
 
 from __future__ import annotations
 
@@ -36,7 +23,7 @@ EFFECT_KEYS: tuple[str, ...] = ("topology", "policy", "interaction")
 
 def _mean(values: Sequence[float]) -> float:
     """Arithmetic mean that tolerates an empty sequence (returns ``nan``)."""
-    values = [float(v) for v in values if v == v]  # drop NaN
+    values = [float(v) for v in values if v == v]
     return sum(values) / len(values) if values else float("nan")
 
 
@@ -60,7 +47,7 @@ def _resolve_policy(checkpoint, policy_selector):
     if policy_selector is not None:
         return policy_selector
     if checkpoint is None:
-        raise ValueError("run_ablation 需要 checkpoint（PPO 检查点）或 policy_selector")
+        raise ValueError("run_ablation needs a checkpoint (PPO) or a policy_selector")
     return load_policy(checkpoint)
 
 
@@ -76,24 +63,7 @@ def run_ablation(
     realize: str = "hh+rewire",
     policy_selector: Any = None,
 ) -> dict[str, Any]:
-    """Evaluate the 2x2 ablation and return cells, effects and the long table.
-
-    Args:
-        specs: ``graphs.json``-style specs.
-        checkpoint: PPO checkpoint path (used when ``policy_selector`` is None).
-        attacks: Attack methods averaged over within a cell.
-        mode: Cascade mode.
-        seeds: Seeds; the BiT graph itself depends on the seed, so controllers are
-            recomputed per seed.
-        c: Hub factor.
-        h: Number of hubs.
-        realize: BiT realisation mode.
-        policy_selector: Optional pre-loaded :class:`PPOPolicy` (tests / reuse).
-
-    Returns:
-        ``{"rows", "per_dataset_cells", "overall_cell_means", "effects",
-        "per_dataset_effects"}``.
-    """
+    """Evaluate the 2x2 ablation and return cells, effects and the long table."""
     policy_obj = _resolve_policy(checkpoint, policy_selector)
     rows: list[dict[str, Any]] = []
     per_dataset_cells: dict[str, dict[tuple[str, str], list[float]]] = defaultdict(

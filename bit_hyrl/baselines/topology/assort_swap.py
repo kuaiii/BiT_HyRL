@@ -1,20 +1,6 @@
-"""ASSORT-SWAP topology baseline -- assortativity-driven rewiring (Xulvi-Brunet).
+"""ASSORT-SWAP baseline: assortativity-driven rewiring.
 
-Reference: Xulvi-Brunet & Sokolov, *Reshuffling scale-free networks: From random to
-assortative networks*, Phys. Rev. E 70:066102 (2004).
-
-The move set is the same 2-switch as every other rewiring baseline; the acceptance
-rule is purely **local and objective-free**: accept a swap when it increases the
-degree-product sum ``sum_{(u,v)} k_u k_v``, i.e. when it links high-degree nodes to
-high-degree nodes (and low to low).  With probability ``1 - p`` a random swap is
-accepted instead, which reproduces the paper's mixing parameter.
-
-Why it belongs in the baseline table: BiT's design claim is that a **bimodal**
-degree sequence plus hub-hub attachment buys resilience.  Assortative rewiring is the
-cheapest way to obtain the "hub-hub" half of that claim *without* changing the degree
-sequence, so it isolates how much of BiT's gain is assortativity alone versus the
-degree-sequence shaping.  It costs ``O(1)`` per move (no robustness evaluation), which
-is why it needs no budget parameter -- and why it is the fair "free lunch" control.
+Reference: Xulvi-Brunet & Sokolov, Phys. Rev. E 70:066102 (2004).
 """
 
 from __future__ import annotations

@@ -1,14 +1,4 @@
-"""Shared helpers for the ported baselines.
-
-Every topology baseline returns a graph with the **same N** as its input and the
-``0 .. n-1`` label convention used across the package.  Connectivity is repaired by
-**adding the minimum number of edges** to join the connected components (never by
-dropping nodes), so ``N`` is preserved exactly and baseline comparisons stay fair —
-``M`` may grow by ``k-1`` where ``k`` is the number of components.  Positions for the
-position-dependent baselines come from node ``pos`` attributes when present, else
-from a **locally seeded** ``numpy`` generator (``default_rng``) — never the
-process-global RNG.
-"""
+"""Shared helpers for the ported baselines."""
 
 from __future__ import annotations
 
@@ -21,7 +11,7 @@ import numpy as np
 
 LOGGER = logging.getLogger("bit_hyrl.baselines")
 
-try:  # torch is required by ROMEN; keep the import optional for the lighter baselines
+try:
     import torch
 except Exception:  # pragma: no cover
     torch = None
@@ -36,23 +26,7 @@ __all__ = [
 
 @contextlib.contextmanager
 def seeded_legacy(seed: int):
-    """Run a block under a **seed-derived** global RNG, then restore it exactly.
-
-    The ported baselines are third-party research code that draw from the
-    process-global ``random`` / ``numpy.random`` / ``torch`` generators.  To make a
-    given ``seed`` reproducible *without polluting* the core pipeline, this
-    context manager:
-
-    1. derives three independent seeds from ``numpy.random.SeedSequence(seed)``;
-    2. saves the global ``random`` / ``numpy.random`` / ``torch`` (and CUDA) state;
-    3. seeds all three from the derived values inside the block;
-    4. restores every saved state on exit (``finally``) — even on exception.
-
-    So ``construct(G, seed=s)`` is bit-reproducible for a fixed ``s``, and the
-    calling core (which uses :mod:`bit_hyrl.rng` SeedSequence derivation) is left
-    untouched.  ``baselines/`` is excluded from the static ``test_no_global_seed``
-    scan precisely because this vendored code needs the module-level RNG.
-    """
+    """Run a block under a **seed-derived** global RNG, then restore it exactly."""
     children = np.random.SeedSequence(int(seed)).spawn(3)
     r_py = int(children[0].generate_state(1, dtype=np.uint32)[0])
     r_np = int(children[1].generate_state(1, dtype=np.uint32)[0])
@@ -83,12 +57,7 @@ def seeded_legacy(seed: int):
 
 
 def _ensure_connected(graph: nx.Graph) -> int:
-    """Join components by adding the **minimum** ``k-1`` edges (no node dropped).
-
-    Repeatedly connects the current **largest** component's highest-degree node to the
-    highest-degree node of the next component (degree-then-smallest-id tie-break, so
-    deterministic), merging as it goes.  Returns the number of added edges.
-    """
+    """Join components by adding the **minimum** ``k-1`` edges (no node dropped)."""
     components = [set(component) for component in nx.connected_components(graph)]
     if len(components) <= 1:
         return 0
@@ -105,19 +74,7 @@ def _ensure_connected(graph: nx.Graph) -> int:
 
 
 def finalize_construct(graph, name: str = "") -> nx.Graph:
-    """Coerce to a **simple, connected, ``0..n-1``** graph that PRESERVES ``N``.
-
-    If the constructed graph is disconnected it is repaired by adding the minimum
-    ``k-1`` edges (one per extra connected component) between high-degree endpoints
-    — **    no node is dropped**, so ``N`` stays exact and baselines are not weakened.
-    ``M`` may increase by up to ``k-1`` edges (small for most methods — +0/+1 — but up
-    to tens when a method shatters a large graph into many components, e.g. FRED-ABL /
-    QDLM).  Self-loops and parallel
-    edges are removed (simple graph).
-
-    Fail-fast: raises ``ValueError`` if the result loses a node or is disconnected,
-    so a future regression explodes on the first run instead of silently shrinking.
-    """
+    """Coerce to a **simple, connected, ``0..n-1``** graph that PRESERVES ``N``."""
     g = nx.Graph()
     g.add_nodes_from(graph.nodes())
     g.add_edges_from((u, v) for u, v in graph.edges() if u != v)

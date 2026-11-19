@@ -29,14 +29,7 @@ DEFAULT_DECODE: dict[str, Any] = {
 
 
 class PPOPolicy:
-    """Greedy or sampled sequential placement with a trained actor-critic.
-
-    Args:
-        model: A trained :class:`ActorCritic`.
-        config: Decode/feature schema (``include_betweenness``, ``betweenness_k``,
-            ``heads``).  Missing keys fall back to :data:`DEFAULT_DECODE`.
-        device: Torch device (CPU by default).
-    """
+    """Greedy or sampled sequential placement with a trained actor-critic."""
 
     def __init__(
         self, model: ActorCritic, config: dict[str, Any] | None = None, device: str = "cpu"
@@ -59,18 +52,7 @@ class PPOPolicy:
     def select(
         self, graph, n_c: int, greedy: bool = True, *, seed: int = 0
     ) -> list[int]:
-        """Select ``n_c`` distinct controllers, returns ascending node ids.
-
-        Args:
-            graph: The graph to place controllers on.
-            n_c: How many controllers to place (clipped to ``[0, N]``).
-            greedy: If True take the arg-max each step; otherwise sample from the
-                masked categorical (deterministically, via the derived seed).
-            seed: Root seed for the sampling path (ignored when ``greedy=True``).
-
-        Returns:
-            A sorted list of controller node ids.
-        """
+        """Select ``n_c`` distinct controllers, returns ascending node ids."""
         n = graph.number_of_nodes()
         n_c = max(0, min(int(n_c), int(n)))
         if n_c == 0:
@@ -98,7 +80,6 @@ class PPOPolicy:
             selected.append(pick)
         return sorted(int(node) for node in selected)
 
-    # ``apply`` is an alias used by the CLI/transfer helpers.
     def apply(self, graph, n_c: int) -> list[int]:
         """Greedy zero-shot placement (see :meth:`select`)."""
         return self.select(graph, n_c, greedy=True)

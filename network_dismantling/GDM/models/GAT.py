@@ -1,20 +1,3 @@
-#   This file is part of GDM (Graph Dismantling with Machine learning),
-#   proposed in the paper "Machine learning dismantling and
-#   early-warning signals of disintegration in complex systems"
-#   by M. Grassia, M. De Domenico and G. Mangioni.
-#
-#   GDM is free software: you can redistribute it and/or modify
-#   it under the terms of the GNU General Public License as published by
-#   the Free Software Foundation, either version 3 of the License, or
-#   (at your option) any later version.
-#
-#   GDM is distributed in the hope that it will be useful,
-#   but WITHOUT ANY WARRANTY; without even the implied warranty of
-#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#   GNU General Public License for more details.
-#
-#   You should have received a copy of the GNU General Public License
-#   along with GDM.  If not, see <http://www.gnu.org/licenses/>.
 
 # from collections import defaultdict
 
@@ -24,11 +7,6 @@ from torch.nn import functional as F
 from network_dismantling.GDM.models.base import BaseModel
 from network_dismantling.GDM.models.layers.gat_conv import GATConv
 from network_dismantling.common.data_structures import dotdict, DefaultDict
-
-
-# from torch_geometric.graphgym import GATConv
-# from network_dismantling.GDM.models.layers.gat_conv import GATConv
-# from network_dismantling.GDM.models.layers.gat_conv_1_1_2 import GATConv as GATConvOld
 
 
 class GAT_Model(BaseModel):
@@ -63,17 +41,6 @@ class GAT_Model(BaseModel):
             num_heads = self.heads[i - 1] if ((self.concat[i - 1] is True) and (i > 0)) else 1
             in_channels = self.conv_layers[i - 1] * num_heads if i > 0 else self.num_features
             self.convolutional_layers.append(
-                #     GATConvOld(in_channels=in_channels,
-                #                out_channels=self.conv_layers[i],
-                #                heads=self.heads[i],
-                #                concat=self.concat[i],
-                #                negative_slope=self.negative_slope[i],
-                #                dropout=self.dropout[i],
-                #                bias=self.bias[i],
-                #                )
-                # )
-                #
-                # self.convolutional_layers_new.append(
                 GATConv(in_channels=in_channels,
                         out_channels=self.conv_layers[i],
                         heads=self.heads[i],
@@ -82,9 +49,6 @@ class GAT_Model(BaseModel):
                         dropout=self.dropout[i],
                         bias=self.bias[i],
                         add_self_loops=True,
-                        # flow="target_to_source",
-                        # flow="source_to_target",
-                        # node_dim=1,
                         )
             )
 
@@ -127,11 +91,6 @@ class GAT_Model(BaseModel):
         action = "append" if grid else None
         wrapper = (lambda x: [x] if grid else x)
 
-        # def wrapper(x):
-        #     if grid:
-        #         return [x]
-        #     else:
-        #         return x
 
         parser.add_argument(
             "-CL",
@@ -227,39 +186,6 @@ class GAT_Model(BaseModel):
 
         return '_'.join(name)
 
-    # @staticmethod
-    # def from_model_name(name: str) -> "GAT_Model":
-    #     parameters_mapping = {}
-    #     for parameter in GAT_Model._model_parameters:
-    #         key = ''.join(x[0].upper() for x in parameter.split("_"))
-    #         parameters_mapping[key] = parameter
-    #
-    #     parameters_mapping["S"] = "seed_train"
-    #
-    #     parameters = {}
-    #
-    #     buffer = []
-    #     for parameter in name.split("_"):
-    #         for p in parameters_mapping.keys():
-    #             if parameter.startswith(p):
-    #                 parameter = parameter.replace(p, "")
-    #                 break
-    #         print(parameter)
-    #         if parameter in parameters_mapping:
-    #
-    #             if len(buffer) == 0:
-    #                 parameters[parameters_mapping[parameter]] = []
-    #             elif len(buffer) == 1:
-    #                 parameters[parameters_mapping[parameter]] = buffer[0]
-    #             else:
-    #                 parameters[parameters_mapping[parameter]] = buffer
-    #
-    #             buffer = []
-    #
-    #         buffer.append(parameter)
-    #
-    #     print(parameters)
-    #     return GAT_Model(parameters)
 
     @staticmethod
     def parameters_combination_validator(params):

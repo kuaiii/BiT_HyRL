@@ -1,13 +1,8 @@
-"""input_sweep.py —— 以输入变量 (n, <k>) 为横轴的扫描（论文图 1 的数据源）。
+"""Sweep over the input variables ``(n, <k>)`` behind Fig. 1.
 
-对每个 (n, <k>)：
-  1) 造原图（随机连通，固定边数），实测 e0、两个 f_c；
-  2) 按两条界得整数域 [lo, hi]（单枢纽）；
-  3) 域内每个整数 k_max 造双峰图，实测 e、f_c^ran、f_c^tar，算 Phi；
-  4) 汇总：域内 e/e0 与 f/f0 的最小值、最大值、Phi 极差、argmax 位置。
-
-用法：
-    python input_sweep.py --n 100,300,1000 --kbar 2,2.5,3,4,5,6,8,10,12,16
+For each cell it builds the original graph, derives the feasible interval of
+``k_max``, builds the bimodal graph for every integer in it and records ``E``,
+``f_c`` and ``Phi``.
 """
 
 from __future__ import annotations
@@ -32,7 +27,7 @@ def measure(adj, seeds: int = 4) -> Dict:
 
 def cell(n: int, kbar: float, seeds: int = 4, gseeds: int = 2) -> List[Dict]:
     M = int(round(n * kbar / 2))
-    if M < n - 1:                      # 连通简单图都放不下
+    if M < n - 1:
         return [dict(n=n, kbar=kbar, M=M, status="no-graph")]
     base = random_conn(n, M, seed=0)
     if not base.get("adj"):
@@ -68,10 +63,6 @@ def cell(n: int, kbar: float, seeds: int = 4, gseeds: int = 2) -> List[Dict]:
         fr = sum(frs) / len(frs)
         ft = sum(fts) / len(fts)
         ok_phi = (e > 0 and e0 > 0 and fr + ft > 0 and f0 > 0)
-        # phi 必须与论文式 (finite_f) 同口径：算术加权 0.5·E/E0 + 0.5·f/f0。
-        # 2026-11-18 之前这里存的是 0.5·ln(E/E0) + 0.5·ln(f/f0)，即两者的几何平均的
-        # 对数——不是论文的 Φ_ε，正文的三档区间因此全错（0.71–0.88 / 1.01–1.28）。
-        # 旧值保留在 phi_loggeo 列，只为追溯。
         rows.append(dict(n=n, kbar=round(kbar, 4), M=M, status="ok" if ok_phi else "degen",
                          lo=lo, hi=hi, k=k, kmin=d["kmin"], k_eff=d["k_eff"],
                          e0=e0, f0=f0, e=e, fr=fr, ft=ft,
@@ -111,7 +102,7 @@ def main() -> None:
                 print(f"n={n:5d} <k>={kb:5.1f} {st} [{rs[0].get('lo')},{rs[0].get('hi')}]", flush=True)
 
     if not rows:
-        print("空结果")
+        print("empty result")
         return
     keys = ["n", "kbar", "M", "status", "lo", "hi", "k", "kmin", "k_eff",
             "e0", "f0", "e", "fr", "ft", "phi", "phi_loggeo"]
@@ -119,7 +110,7 @@ def main() -> None:
         w = csv.DictWriter(f, fieldnames=keys, extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)
-    print(f"{len(rows)} 行 -> {a.out}  ({time.time()-t0:.1f}s)")
+    print(f"{len(rows)} rows -> {a.out}  ({time.time()-t0:.1f}s)")
 
 
 if __name__ == "__main__":

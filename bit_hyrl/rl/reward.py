@@ -1,23 +1,4 @@
-"""Placement reward aligned to the paper's ``(w_G, w_S, w_H)`` decomposition (T10).
-
-For a candidate controller set the reward runs the **structural** cascade on a
-short prefix of two attacks (degree-targeted and random) and reads three terms,
-all oriented "higher is better" so the PPO objective simply maximises the weighted
-sum:
-
-* ``structure`` — mean surviving GCC fraction over the attack prefix (robustness);
-* ``csa``       — Control Supply Availability of the surviving set at the prefix
-  end (:func:`bit_hyrl.evaluation.metrics.calculate_csa`);
-* ``h_load``    — normalised load-share control entropy at the prefix end
-  (:func:`bit_hyrl.evaluation.metrics.calculate_h_c_norm`);
-* ``distance``  — optional mean inverse switch→controller distance (default weight
-  ``0`` in the paper's ``(0.6, 0.2, 0.2, 0.0)`` configuration, so it is not
-  computed unless its weight is positive).
-
-Each term is averaged over the two attacks, and every random draw comes from
-:func:`bit_hyrl.rng.derive`, so ``placement_reward`` is a pure, deterministic
-function of ``(graph, controllers, cfg)``.
-"""
+"""Placement reward following the ``(w_G, w_S, w_H)`` decomposition."""
 
 from __future__ import annotations
 
@@ -67,7 +48,7 @@ def _distance_term(graph: nx.Graph, controllers: list[int]) -> float:
         return 1.0
     total = 0.0
     for node in switches:
-        hops = lengths.get(node, len(graph))  # unreachable -> worst case
+        hops = lengths.get(node, len(graph))
         total += 1.0 / (1.0 + hops)
     return total / len(switches)
 
@@ -80,21 +61,7 @@ def placement_reward(
     seed: int | None = None,
     attacks: Sequence[str] = DEFAULT_REWARD_ATTACKS,
 ) -> dict[str, float]:
-    """Score a controller placement; return the four terms and the weighted sum.
-
-    Args:
-        graph: The graph the controllers are placed on (ids ``0 .. N-1``).
-        controllers: Controller node ids.
-        cfg: ``TrainConfig``-like object (``reward_weights``,
-            ``attack_prefix_fraction``, optional ``seed``) or ``None`` for the
-            paper defaults.
-        seed: Root seed for the attack sequences; defaults to ``cfg.seed`` (0).
-        attacks: Attack methods averaged over.
-
-    Returns:
-        ``{"structure", "csa", "h_load", "distance", "weighted"}`` — floats.  All
-        terms are ``[0, 1]`` and ``weighted`` is the paper-weighted combination.
-    """
+    """Score a controller placement; return the four terms and the weighted sum."""
     weights = _weights_from(cfg)
     frac = float(getattr(cfg, "attack_prefix_fraction", 0.3) if cfg is not None else 0.3)
     if seed is None:
@@ -121,7 +88,6 @@ def placement_reward(
         prefix_sequence = sequence[:prefix]
         trace = run_cascade(graph, prefix_sequence, controllers, model, cascade_cfg)
 
-        # structure: mean GCC fraction over the prefix, prepended with the intact 1.0.
         gcc = [1.0] + list(trace.r_curve)
         structure_terms.append(sum(gcc) / len(gcc))
 

@@ -1,9 +1,4 @@
-"""UNITY topology baseline — ported from ``network_construction/UNITY/UNITY.py``.
-
-Logic copied in (``_unity_impl``); no import of the old tree.  Uses
-``UNITY.generate_matched_topology`` which aligns the reconstructed graph to the
-input's ``N``/``M`` (with a wider comm-range fallback when edges are short).
-"""
+"""UNITY baseline: robust topology generation matched to the input ``N`` and ``M``."""
 
 from __future__ import annotations
 

@@ -45,8 +45,6 @@ def reinsert_nodes(
         lcc = 0
 
     if lcc > stop_condition:
-        # Initial sequence didn't fully break - remove nodes progressively
-        # until condition is met, then proceed
         G_remaining.remove_nodes_from(removals)
         if G_remaining.number_of_nodes() > 0:
             components = list(nx.connected_components(G_remaining))
@@ -64,8 +62,6 @@ def reinsert_nodes(
         if node not in kept_removed:
             continue
 
-        # Try adding this node back
-        # Add node and its edges to neighbors that are still in the graph
         neighbors_in_graph = [v for v in G.neighbors(node) if v not in kept_removed or v == node]
         if neighbors_in_graph:
             G_remaining.add_node(node)

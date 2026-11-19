@@ -8,7 +8,6 @@ from . import kmedian, madqn_sim, mwcl_sim, random_placement
 PLACEMENT_REGISTRY = {
     "MWCL-sim": mwcl_sim.select,
     "MADQN-sim": madqn_sim.select,
-    # lower bound (blind placement) and textbook facility-location baseline
     "Random-placement": random_placement.select,
     "KMedian": kmedian.select,
 }

@@ -1,27 +1,4 @@
-"""Build the train/val/test splits from ``dataset/all`` minus the 30 eval graphs.
-
-Output: ``configs/splits.json`` with mutually-exclusive ``test`` / ``val`` /
-``train`` path lists (no path and no ``edge_list_sha256`` overlap across the three
-sets) plus a ``meta`` block (per-set counts, size histogram, real/syn ratio,
-``leakage_excluded``).
-
-Rules
------
-* TEST  = the 30 ``path`` entries of ``configs/graphs.json`` (unchanged).
-* POOL  = ``dataset/all/syn/*.gml`` + ``dataset/all/real/*.gml``.
-* Leakage: any pool graph whose ``edge_list_sha256`` equals a test graph's hash (or
-  whose path is a test path) is **excluded** and counted.
-* Pool duplicates by sha are de-duplicated (first wins) so the three sets are
-  sha-disjoint by construction.
-* VAL   = stratified ``~10%`` per ``(source, size_bucket)`` stratum, total capped
-  at ``--val-cap``.
-* TRAIN = all remaining ``real`` graphs + stratified ``syn`` fill up to
-  ``--train-cap``.
-
-Run from ``codes/v3``::
-
-    /d/ProgramData/Anaconda/python.exe scripts/build_splits.py
-"""
+"""Build the train/val/test splits and write ``configs/splits.json``."""
 
 from __future__ import annotations
 
@@ -72,7 +49,7 @@ def _load_all(candidates: list[tuple[str, str]], workers: int) -> list:
         with ProcessPoolExecutor(max_workers=count) as executor:
             return list(executor.map(_load_candidate, candidates, chunksize=64))
     except Exception as exc:  # pragma: no cover - environment-specific fallback
-        print(f"[warn] 并行加载不可用（{exc}），回退串行（较慢）", flush=True)
+        print(f"[warn] parallel loading unavailable ({exc}), falling back to serial", flush=True)
         return [_load_candidate(item) for item in candidates]
 
 
@@ -110,7 +87,6 @@ def build_splits(train_cap: int, val_cap: int, seed: int,
     registry = json.loads(graphs_path.read_text(encoding="utf-8"))
     test_paths = [entry["path"] for entry in registry["graphs"]]
 
-    # Test hashes + node counts.
     test_shas: set[str] = set()
     test_nodes: list[int] = []
     test_path_set = set(test_paths)
@@ -119,7 +95,6 @@ def build_splits(train_cap: int, val_cap: int, seed: int,
         test_shas.add(edge_list_sha256(graph))
         test_nodes.append(graph.number_of_nodes())
 
-    # Candidate pool.
     candidates: list[tuple[str, str]] = []
     for source, sub in (("syn", "dataset/all/syn"), ("real", "dataset/all/real")):
         for path in sorted((PROJECT_ROOT / sub).glob("*.gml")):
@@ -131,7 +106,7 @@ def build_splits(train_cap: int, val_cap: int, seed: int,
     unreadable = 0
     sha_duplicates = 0
     seen_shas: set[str] = set()
-    rows: list[tuple[str, str, int, str]] = []  # (rel, source, n, bucket)
+    rows: list[tuple[str, str, int, str]] = []
     for rel, source, node_count, sha in loaded:
         if rel in test_path_set:
             leakage_excluded += 1
@@ -143,12 +118,11 @@ def build_splits(train_cap: int, val_cap: int, seed: int,
             leakage_excluded += 1
             continue
         if sha in seen_shas:
-            sha_duplicates += 1  # keep the pool sha-unique for cross-set disjointness
+            sha_duplicates += 1
             continue
         seen_shas.add(sha)
         rows.append((rel, source, node_count, bucket_of(node_count)))
 
-    # VAL: stratified ~10% per (source, bucket), capped.
     val_target = min(val_cap, round(0.1 * len(rows)))
     strata_all: dict = defaultdict(list)
     for row in rows:
@@ -157,7 +131,6 @@ def build_splits(train_cap: int, val_cap: int, seed: int,
     val_rows = _sample_stratified(strata_all, val_target, gen_val)
     val_rel = {row[0] for row in val_rows}
 
-    # TRAIN: all remaining real + stratified syn fill to train_cap.
     remaining = [row for row in rows if row[0] not in val_rel]
     real_rem = [row for row in remaining if row[1] == "real"]
     syn_rem = [row for row in remaining if row[1] == "syn"]

@@ -1,16 +1,7 @@
-"""Pin down the upper density bound: kbar = 20 / 30 at 20 seeds.
+"""Upper density bound for reconstruction: ``kbar`` = 20 and 30 at 20 seeds.
 
-The earlier dense probe used only 3 seeds, so the claim "reconstruction stops paying above
-kbar ~ 20" rested on a +0.0078 difference that was inside the noise.  This script repeats
-the comparison at 20 seeds so the bound can be stated with an interval rather than a
-point estimate.
-
-For each case it compares the un-reconstructed original against BiT at c = 1.0 and 1.6,
-all under the same PPO placement and the same protocol as the main matrix.
-
-Usage:
-    python scripts/dense_upper_bound.py
-    python scripts/dense_upper_bound.py --seeds 20
+Compares the un-reconstructed graph against BiT at ``c`` = 1.0 and 1.6 under the
+same placement and protocol as the main experiments.
 """
 
 from __future__ import annotations
@@ -55,7 +46,7 @@ def _build(n: int, kbar: float) -> nx.Graph:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="稠密端上界（20 seed）")
+    parser = argparse.ArgumentParser(description="upper density bound at 20 seeds")
     parser.add_argument("--seeds", type=int, default=20)
     parser.add_argument("--checkpoint", default="results/checkpoints/ppo_final_s0.pt")
     parser.add_argument("--out", default=str(OUT))

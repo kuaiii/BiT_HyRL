@@ -1,8 +1,4 @@
-"""ONION topology baseline — ported from ``network_construction/ONION/onion.py``.
-
-Logic copied in (``_onion_impl``); no import of the old tree.  The original
-module-level ``matplotlib.use('TkAgg')`` / rcParams are stripped in the impl.
-"""
+"""ONION baseline: degree-preserving edge swaps driven by the onion decomposition."""
 
 from __future__ import annotations
 
@@ -21,6 +17,6 @@ def construct(G, *, seed: int = 0, max_iterations: int = 2000, **params):
         optimizer = OnionNetworkOptimizer(G)
         try:
             graph = optimizer.optimize_network(max_iterations=max_iterations, verbose=False)
-        except TypeError:  # some builds do not accept ``verbose``
+        except TypeError:
             graph = optimizer.optimize_network(max_iterations=max_iterations)
     return finalize_construct(graph if graph is not None else G, NAME)

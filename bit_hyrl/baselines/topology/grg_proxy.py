@@ -1,30 +1,6 @@
-"""GRG-proxy topology baseline -- regular / high-expansion construction.
+"""Regular, high-expansion GRG proxy used for the early comparisons.
 
-.. warning::
-
-   **NOT the official implementation.**  The reference is
-
-   > *Design and Application of Network Topology Robustness Optimization Algorithms
-   > Based on Cheeger's Inequality*, IEEE Transactions on Networking, 2026,
-   > doi:10.1109/TON.2026.3687400,
-
-   whose ``Good Regular Graph`` (GRG) algorithm is built on a generalised Cheeger
-   inequality: a regular graph whose every balanced cut needs many edges cannot be
-   shattered by a hub-targeted attack.  The paper is paywalled, publishes no code, and
-   the exact generalisation plus its expansion procedure are not in the abstract.  So
-   this module reproduces the **stated principle**, not the algorithm:
-
-   * build a (near-)regular graph with ``k = floor(2M/N)`` -- regular graphs have no
-     hubs, so a degree-targeted attack cannot decapitate them in one step;
-   * add the few leftover edges needed to hit the input's ``M`` exactly, always on the
-     currently lowest-degree pair, so the graph stays as regular as ``M`` allows;
-   * hill-climb the **algebraic connectivity** ``lambda_2`` (the spectral surrogate of
-     the Cheeger constant) with degree-preserving 2-switches.
-
-   The interpretation is the one that matters for BiT: *is a hub-free, large-expansion
-   graph a cheaper route to robustness than a bimodal hub design at the same M?*
-   The returned graph is scored by the ordinary pipeline like every other baseline,
-   and ``M`` is preserved exactly, so the comparison is budget-faithful.
+Superseded by :mod:`grg`; kept so the older numbers remain reproducible.
 """
 
 from __future__ import annotations
@@ -51,7 +27,7 @@ def _lambda2(graph: nx.Graph) -> float:
 def _near_regular(n: int, m: int, seed: int = 0) -> nx.Graph:
     """A connected graph on ``n`` nodes with exactly ``m`` edges, as regular as possible."""
     k = max(1, (2 * m) // n)
-    if (k * n) % 2:  # degree sum must be even for a regular graph to exist
+    if (k * n) % 2:
         k -= 1
     k = max(1, k)
     graph = None
@@ -66,7 +42,6 @@ def _near_regular(n: int, m: int, seed: int = 0) -> nx.Graph:
     if graph is None:
         return nx.gnp_random_graph(n, min(1.0, 2 * m / (n * (n - 1))), seed=seed)
 
-    # Hit ``m`` exactly: add on the lowest-degree pair, otherwise peel off on the highest.
     while graph.number_of_edges() < m:
         candidates = sorted(graph.nodes(), key=lambda v: (graph.degree(v), v))[: 2 * n]
         added = False
@@ -91,7 +66,7 @@ def construct(G, *, seed: int = 0, swaps: int = 200, **params):
     with seeded_legacy(seed):
         n, m = G.number_of_nodes(), G.number_of_edges()
         current = _near_regular(n, m, seed=int(seed))
-        if not nx.is_connected(current):  # repair before scoring
+        if not nx.is_connected(current):
             current = finalize_construct(current, NAME)
         edges = list(current.edges())
         current_l2 = _lambda2(current)

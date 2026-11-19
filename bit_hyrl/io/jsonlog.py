@@ -1,18 +1,7 @@
 """Canonical JSON / JSONL writing, reading and hashing.
 
-This is the **only** place in the package allowed to serialise a result object.
-Centralising it buys three properties that the paper needs:
-
-1. **Byte-stable output** — ``sort_keys=True`` plus a fixed separator pair means
-   two runs that computed the same values produce the same bytes, so a ``diff``
-   between two result files is meaningful.
-2. **Deterministic floats** — every float is rounded to six decimals and
-   ``-0.0`` is normalised to ``0.0``.  Otherwise a value that is numerically
-   zero can flip sign between runs and show up as a spurious diff.
-3. **Explicit non-finite handling** — ``NaN`` / ``Inf`` become ``null`` and
-   ``allow_nan=False`` then guarantees the writer can never emit the invalid
-   JSON literals ``NaN`` / ``Infinity`` (which are not valid JSON and break
-   every downstream consumer, including the TeX table generator).
+Output is byte-stable (sorted keys, fixed separators, six-decimal floats), so two
+runs that compute the same values produce identical files.
 """
 
 from __future__ import annotations
@@ -45,51 +34,21 @@ FLOAT_NDIGITS = 6
 
 
 def _clean_float(value: float) -> float | None:
-    """Round a float to :data:`FLOAT_NDIGITS`, mapping non-finite to ``None``.
-
-    Args:
-        value: Any float.
-
-    Returns:
-        ``None`` for ``NaN`` / ``±Inf``, otherwise the rounded value with
-        ``-0.0`` collapsed to ``0.0``.
-    """
+    """Round a float to :data:`FLOAT_NDIGITS`, mapping non-finite to ``None``."""
     number = float(value)
     if not math.isfinite(number):
         return None
     rounded = round(number, FLOAT_NDIGITS)
-    if rounded == 0.0:  # collapses -0.0 -> 0.0
+    if rounded == 0.0:
         return 0.0
     return rounded
 
 
 def sanitize(obj: Any) -> Any:
-    """Recursively convert ``obj`` into JSON-safe plain Python data.
-
-    Conversion rules:
-
-    * ``tuple`` → ``list`` (JSON has no tuple);
-    * ``set`` / ``frozenset`` → sorted ``list`` (iteration order of a set is not
-      stable across processes, so it must never leak into an artefact);
-    * dataclass instances and objects exposing ``to_dict()`` → ``dict``;
-    * mapping keys → ``str`` (JSON object keys are strings);
-    * ``float`` → rounded to six decimals, ``-0.0`` → ``0.0``,
-      ``NaN`` / ``±Inf`` → ``None``;
-    * numpy scalars / arrays → Python scalars / lists.
-
-    Args:
-        obj: Arbitrary nested structure.
-
-    Returns:
-        A structure made only of ``dict``, ``list``, ``str``, ``int``, ``float``,
-        ``bool`` and ``None``.
-
-    Raises:
-        TypeError: If a value has no defensible JSON representation.
-    """
+    """Recursively convert ``obj`` into JSON-safe plain Python data."""
     if obj is None or isinstance(obj, (bool, str)):
         return obj
-    if isinstance(obj, int):  # bool already handled above
+    if isinstance(obj, int):
         return int(obj)
     if isinstance(obj, float):
         return _clean_float(obj)
@@ -108,27 +67,17 @@ def sanitize(obj: Any) -> Any:
     to_dict = getattr(obj, "to_dict", None)
     if callable(to_dict):
         return sanitize(to_dict())
-    # numpy scalars and arrays, and anything else exposing ``item`` / ``tolist``
     tolist = getattr(obj, "tolist", None)
     if callable(tolist):
         return sanitize(tolist())
     item = getattr(obj, "item", None)
     if callable(item):
         return sanitize(item())
-    raise TypeError(f"无法序列化类型 {type(obj).__name__}: {obj!r}")
+    raise TypeError(f"cannot serialise {type(obj).__name__}: {obj!r}")
 
 
 def dumps(obj: Any, *, indent: int | None = None) -> str:
-    """Return the canonical JSON text for ``obj``.
-
-    Args:
-        obj: Any structure accepted by :func:`sanitize`.
-        indent: Optional indentation (``None`` gives one line, as used by JSONL).
-
-    Returns:
-        Canonical JSON text: keys sorted, no trailing whitespace, floats
-        rounded, non-finite values rendered as ``null``.
-    """
+    """Return the canonical JSON text for ``obj``."""
     payload = sanitize(obj)
     if indent is None:
         return json.dumps(
@@ -145,16 +94,7 @@ def loads(text: str) -> Any:
 
 
 def dump_json(path: str | Path, obj: Any, *, indent: int | None = 2) -> Path:
-    """Write ``obj`` to ``path`` as canonical JSON.
-
-    Args:
-        path: Destination file; parent directories are created.
-        obj: Payload.
-        indent: ``None`` for a single line, otherwise the indent width.
-
-    Returns:
-        The path written.
-    """
+    """Write ``obj`` to ``path`` as canonical JSON."""
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     text = dumps(obj, indent=indent)
@@ -170,15 +110,7 @@ def load_json(path: str | Path) -> Any:
 
 
 def write_jsonl(path: str | Path, rows: Iterable[Any]) -> Path:
-    """Write ``rows`` as JSONL (one canonical JSON object per line).
-
-    Args:
-        path: Destination file; parent directories are created.
-        rows: Iterable of payloads.
-
-    Returns:
-        The path written.
-    """
+    """Write ``rows`` as JSONL (one canonical JSON object per line)."""
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("w", encoding="utf-8", newline="\n") as handle:
@@ -218,12 +150,7 @@ def sha256_text(text: str) -> str:
 
 
 def sha256_json(obj: Any) -> str:
-    """Return the SHA-256 of the canonical JSON encoding of ``obj``.
-
-    This is the hash used for edge sequences and attack protocols: it changes
-    if and only if the *semantic* content changes, because the encoding is
-    canonical.
-    """
+    """Return the SHA-256 of the canonical JSON encoding of ``obj``."""
     return sha256_text(dumps(obj))
 
 

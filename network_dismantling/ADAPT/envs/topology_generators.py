@@ -60,9 +60,6 @@ def generate_complete(n: int) -> nx.Graph:
     return nx.complete_graph(n)
 
 
-# ---------------------------------------------------------------------------
-# Main entry point
-# ---------------------------------------------------------------------------
 SPARSITY_PARAMS = {
     "extremely_sparse": {
         "tree": {},

@@ -46,9 +46,6 @@ class ActorCritic(nn.Module):
             dropout=dropout,
         )
 
-        # Action embedding: map global node IDs + terminate index to vectors
-        # index max_nodes   -> terminate action
-        # index max_nodes+1 -> padding / no previous action
         self.action_embedding = nn.Embedding(max_nodes + 2, action_dim)
 
         self.history_gru = HistoryGRU(

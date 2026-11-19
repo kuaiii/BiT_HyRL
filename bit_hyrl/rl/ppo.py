@@ -1,15 +1,7 @@
-"""Actor-critic network and the PPO objective (T10, paper Eq. PPO).
+"""Actor-critic network and the PPO objective.
 
-The policy is a *sequential, without-replacement* controller placer: at each step
-it scores every not-yet-selected node, masks the already-selected ones, and picks
-one.  The actor head therefore just emits one logit per node; the masking +
-softmax happens in :func:`masked_distribution`, shared by rollout (sampling) and
-the PPO update (re-scoring).
-
-The critic regresses the terminal placement reward from the mean-pooled graph
-embedding.  With ``gamma = 1`` and a single terminal reward, the discounted return
-of every step in an episode equals that terminal reward — see
-:func:`compute_returns`.
+The policy places controllers sequentially without replacement: one logit per
+node, masked at every step.
 """
 
 from __future__ import annotations
@@ -29,20 +21,11 @@ __all__ = [
     "surrogate_loss",
 ]
 
-#: Small constant used to forbid already-selected nodes (``-inf`` breaks softmax
-#: gradients when a whole row is masked; ``-1e9`` is finite and safe).
 _MASK_VALUE = -1.0e9
 
 
 class ActorCritic(nn.Module):
-    """GAT encoder + linear actor head + MLP critic head.
-
-    Args:
-        in_dim: Node-feature width.
-        hidden_dim: GAT embedding width.
-        layers: Number of GAT layers (``gcn_layers``).
-        heads: Attention heads per layer.
-    """
+    """GAT encoder + linear actor head + MLP critic head."""
 
     def __init__(self, in_dim: int, hidden_dim: int, layers: int, heads: int = 2) -> None:
         super().__init__()
@@ -70,16 +53,7 @@ class ActorCritic(nn.Module):
 def masked_distribution(
     logits: torch.Tensor, used: Iterable[int]
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Mask ``used`` node logits and return ``(probs, log_probs, entropy)``.
-
-    Args:
-        logits: Raw per-node scores (``N``).
-        used: Node indices already selected in this episode.
-
-    Returns:
-        ``probs`` and ``log_probs`` of shape ``(N,)`` and the scalar entropy
-        ``-\\sum_i p_i \\log p_i`` of the masked categorical.
-    """
+    """Mask ``used`` node logits and return ``(probs, log_probs, entropy)``."""
     used = list(used)
     masked = logits
     if used:
@@ -93,12 +67,7 @@ def masked_distribution(
 
 
 def compute_returns(rewards: Sequence[float], gamma: float = 1.0) -> list[float]:
-    """Discounted returns ``G_t = sum_{k>=t} gamma^{k-t} r_k`` (backward pass).
-
-    With a single terminal reward and ``gamma = 1`` the result is the terminal
-    reward replicated to every step — which is exactly the credit assignment the
-    placement episode needs.
-    """
+    """Discounted returns ``G_t = sum_{k>=t} gamma^{k-t} r_k`` (backward pass)."""
     returns = [0.0] * len(rewards)
     running = 0.0
     for t in reversed(range(len(rewards))):
@@ -119,23 +88,7 @@ def surrogate_loss(
     value_coef: float,
     entropy_coef: float,
 ) -> tuple[torch.Tensor, float, float, float]:
-    """PPO clipped-surrogate loss with a value baseline and an entropy bonus.
-
-    Args:
-        new_log_probs: Re-scored log-probs of the taken actions (``T``).
-        old_log_probs: Log-probs recorded during the rollout (``T``).
-        advantages: ``G_t - V(s)`` per step (``T``).
-        value: Current scalar critic estimate.
-        returns: Target value (the terminal reward).
-        entropy: Mean policy entropy (scalar).
-        clip: PPO clip range.
-        value_coef: Weight of the value loss.
-        entropy_coef: Weight of the entropy bonus.
-
-    Returns:
-        ``(total_loss, policy_loss, value_loss, entropy)`` — the last three are
-        floats for logging, ``total_loss`` is a differentiable scalar.
-    """
+    """PPO clipped-surrogate loss with a value baseline and an entropy bonus."""
     ratio = torch.exp(new_log_probs - old_log_probs)
     unclipped = ratio * advantages
     clipped = torch.clamp(ratio, 1.0 - clip, 1.0 + clip) * advantages

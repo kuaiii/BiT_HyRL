@@ -1,19 +1,4 @@
-"""Paired statistics for the matrix table (T12).
-
-For each requested pair of levels (e.g. ``bit`` vs ``original`` within the
-``topology`` dimension) the module computes the **paired** difference on matched
-rows (same ``dataset/attack/mode/seed`` and the *other* design factor), then
-reports:
-
-* the per-pair mean and standard deviation of the differences;
-* an **exact Wilcoxon signed-rank** test for small samples (falls back to the
-  normal approximation when exact is not defined / ties present);
-* a **stratified paired bootstrap** 95% CI (1000 resamples, seed derived from
-  :mod:`bit_hyrl.rng`).
-
-Pairs are matched, never pooled, so a topology effect is not contaminated by the
-placement factor (and vice-versa).
-"""
+"""Paired statistics (Wilcoxon signed-rank) for the matrix table."""
 
 from __future__ import annotations
 
@@ -56,7 +41,7 @@ def _pair_dimension(level_a: str) -> str:
         return "topology"
     if level_a in _POLICY_LEVELS:
         return "policy"
-    raise ValueError(f"无法判定配对维度：{level_a!r} 不在 topology/policy 的取值里")
+    raise ValueError(f"cannot determine the paired dimension: {level_a!r} is not a topology/policy level")
 
 
 def _paired_diffs(frame: pd.DataFrame, level_a: str, level_b: str, metric: str) -> list[float]:
@@ -119,21 +104,9 @@ def paired_stats(
     seed: int = 0,
     n_boot: int = 1000,
 ) -> dict[str, Any]:
-    """Compute paired effects for each contrast; return a JSON-ready dict.
-
-    Args:
-        frame: The long-table frame from :func:`bit_hyrl.analysis.matrix.run_matrix`.
-        metric: Column to compare.
-        pairs: ``(level_a, level_b)`` contrasts; the difference is ``a - b``.
-        seed: Root seed for the bootstrap.
-        n_boot: Bootstrap resamples.
-
-    Returns:
-        ``{"metric": ..., "pairs": { "<a>-<b>": {n, mean, std, wilcoxon_stat,
-        wilcoxon_p, ci_low, ci_high} }}``.
-    """
+    """Compute paired effects for each contrast; return a JSON-ready dict."""
     if metric not in frame.columns:
-        raise ValueError(f"metric {metric!r} 不在列 {list(frame.columns)} 中")
+        raise ValueError(f"metric {metric!r} not in columns {list(frame.columns)}")
     report: dict[str, Any] = {"metric": metric, "pairs": {}}
     for level_a, level_b in pairs:
         diffs = np.asarray(_paired_diffs(frame, level_a, level_b, metric), dtype=float)
@@ -156,11 +129,7 @@ def paired_stats(
 
 
 def holm_adjust(pvalues: Sequence[float | None]) -> list[float]:
-    """Holm-Bonferroni step-down adjusted p-values (``None`` treated as 1.0).
-
-    Controls the family-wise error rate across the requested metric family (e.g.
-    the three robustness metrics GCC / CSA / H_C, the paper's reporting口径).
-    """
+    """Holm-Bonferroni step-down adjusted p-values (``None`` treated as 1.0)."""
     pvals = [1.0 if p is None else float(p) for p in pvalues]
     m = len(pvals)
     order = sorted(range(m), key=lambda i: pvals[i])
@@ -180,11 +149,7 @@ def seed_statistics(
     seed: int = 0,
     n_boot: int = 1000,
 ) -> pd.DataFrame:
-    """Aggregate each metric over seeds per ``(dataset, topology, policy, attack, mode)``.
-
-    Returns a long ``DataFrame`` with ``group_keys + ["metric", "n", "mean", "std",
-    "ci_low", "ci_high"]``; the 95% CI is a bootstrap of the mean over the seeds.
-    """
+    """Aggregate each metric over seeds per ``(dataset, topology, policy, attack, mode)``."""
     keys = [k for k in group_keys if k in frame.columns]
     rows: list[dict[str, Any]] = []
     if frame.empty:
@@ -216,20 +181,7 @@ def significance(
     n_boot: int = 1000,
     alpha: float = 0.05,
 ) -> list[dict[str, Any]]:
-    """Paired Wilcoxon vs a reference level + Holm correction across ``metrics``.
-
-    Args:
-        frame: Long-table frame.
-        metrics: Metric family corrected together (paper口径: GCC / CSA / H_C).
-        contrast: ``(level_a, level_b)``; the paired difference is ``a - b`` and the
-            reference level is ``b`` (``original`` by default).
-        seed / n_boot: Bootstrap CI controls.
-        alpha: Significance threshold on the Holm-adjusted p.
-
-    Returns:
-        One dict per metric: ``{contrast, metric, n, mean_diff, wilcoxon_stat,
-        wilcoxon_p, holm_p, ci_low, ci_high, significant}``.
-    """
+    """Paired Wilcoxon vs a reference level + Holm correction across ``metrics``."""
     level_a, level_b = contrast
     records = []
     pvalues: list[float | None] = []
@@ -295,21 +247,7 @@ def method_significance(
     reference: str = "BiT-HyRL",
     core: Sequence[str] = ("auc_gcc", "auc_csa", "auc_hc"),
 ) -> pd.DataFrame:
-    """Method-vs-reference significance: exact Wilcoxon + Holm across the core metrics.
-
-    For each non-reference method, pairs rows with ``reference`` on
-    ``(dataset, attack, seed)`` (same graph, same attack, same seed) and tests the
-    paired difference ``reference - method`` (higher is better) per core metric, with
-    Holm correction over the three core metrics (GCC/CSA/H_C); ``r_res`` is reported
-    but kept **out** of the Holm family (a summary column).  A ``__summary__`` row per
-    method carries ``r_res`` mean diff / p and whether all three core metrics are
-    significant after Holm.
-
-    Returns:
-        A ``DataFrame`` with columns ``method, metric, n_pairs, mean_diff,
-        median_diff, wilcoxon_p, holm_p, direction`` (``metric="__summary__"`` rows
-        summarise each method).
-    """
+    """Method-vs-reference significance: exact Wilcoxon + Holm across the core metrics."""
     methods = sorted(m for m in frame["policy"].unique() if m != reference)
     rows: list[dict[str, Any]] = []
     for method in methods:

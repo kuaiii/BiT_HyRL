@@ -1,21 +1,6 @@
 """Shard scheduler for :mod:`family_bench`.
 
-Every ``(graph, seed)`` pair is one shard and one subprocess, so a crash or an
-out-of-memory kill costs that shard only.  Shards are launched largest graph first:
-the heavy cells are then spread over the whole wall clock instead of piling up at
-the end, which matters because the largest AS snapshot is two orders of magnitude
-dearer than the smallest router graph.
-
-Usage
------
-::
-
-    # 16-core CPU box, the cheap constructors
-    python scripts/run_family.py --methods Original,Random,BA,WS,BiT-R,BiT-HyRL,BiT-E,UNITY,FRED-ABL \
-        --label light --workers 14
-
-    # big-memory box, the learned reconstructors
-    python scripts/run_family.py --methods QDLM,ONION,Eff-R-Net,ROMEN --label heavy --workers 12
+Every ``(graph, seed)`` pair runs as one subprocess, largest graph first.
 """
 
 from __future__ import annotations

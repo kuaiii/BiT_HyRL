@@ -1,22 +1,4 @@
-"""K-median placement — the textbook facility-location baseline.
-
-Objective: choose ``budget`` controllers minimising the **total** assignment distance
-``sum_v min_j d(v, c_j)``.  This is the standard latency-oriented placement, and it is
-the baseline most likely to be requested because every SDN placement paper compares
-against it.
-
-Exact k-median is NP-hard, so this uses the standard **greedy** construction: start from
-the single best node, then repeatedly add the node that yields the largest reduction in
-total distance.  Greedy k-median is within a well-known approximation factor of the
-optimum and is what practitioners use at this scale.
-
-Complexity is ``O(budget * n^2)`` with numpy vectorisation — a few seconds at n ~ 1.5k.
-The result is deterministic (no RNG), so ``seed`` is accepted for interface parity only.
-
-Note: unlike k-center (MWCL-sim, which minimises the *maximum* distance), k-median can
-leave a few nodes very far from any controller.  That distinction matters for the
-tail of the attack — worth reporting both.
-"""
+"""K-median controller placement baseline."""
 
 from __future__ import annotations
 
@@ -47,11 +29,9 @@ def select(graph: nx.Graph, budget: int, seed: int = 0) -> list[int]:
     if budget >= count:
         return nodes
 
-    # current best distance from every node to the chosen set
     nearest = np.full(count, np.inf, dtype=np.float64)
     chosen: list[int] = []
     for _ in range(budget):
-        # total distance if candidate j were added to the current set
         candidate_cost = np.minimum(nearest[:, None], distances).sum(axis=0)
         if chosen:
             candidate_cost[chosen] = np.inf

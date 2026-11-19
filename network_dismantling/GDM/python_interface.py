@@ -1,11 +1,3 @@
-# This script should:
-# 1. Take the input networks
-# 2. Activate the right conda environment?
-# 2. Compute the node features for each network
-# 3. Run the grid search for the best parameters
-# 4. Store the results in a CSV file
-# 5. Run the reinsertion script
-# 6. Extract the best runs from the CSV file and store them in the heuristics.csv file
 import logging
 from pathlib import Path
 
@@ -62,8 +54,6 @@ default_gdm_params = (
     "-FCL 100 -FCL 40 40 40 -FCL 50 30 30 -FCL 100 100 -FCL 40 30 20 -FCL 50 30 30 30 "
     "-H 1 -H 5 -H 10 -H 15 -H 20 -H 30 -H 1 1 -H 5 5 -H 10 10 -H 15 15 -H 20 20 -H 30 30 -H 1 1 1 -H 10 10 10 -H 20 20 20 -H 30 30 30 -H 1 1 1 1 -H 5 5 5 5 -H 10 10 10 10 -H 20 20 20 20 "
 )
-#                      '--jobs 1 ' \
-#                      '--simultaneous_access 1 ' \
 
 default_reinsertion_params = (
     "--file NONE "
@@ -151,29 +141,16 @@ def grid(
         devices.append(device)
         locks[device] = mp_manager.BoundedSemaphore(args.simultaneous_access)
 
-    # # Put all available devices in the queue
-    # for device in devices:
-    #     for _ in range(args.simultaneous_access):
-    #         # Allow simultaneous access to the same device
-    #         device_queue.put(device)
 
     args.devices = devices
     args.locks = locks
 
     # Fill the params queue
     for i, params in enumerate(params_list):
-        # device = devices[i % len(devices)]
-        # params.device = device
-        # params.lock = locks[device]
         params_queue.put(params)
 
     new_runs_buffer = []
 
-    # def callback(future):
-    #     try:
-    #         new_runs_buffer.extend(future.result())
-    #     except Exception as e:
-    #         logger.exception(e, exc_info=True)
 
     runtime_exceptions = 0
     models_not_found = 0
@@ -354,8 +331,6 @@ def _GDM(
             parse_string=default_reinsertion_params.split()
         )
         reinsertion_args.file = args.output_file
-        # reinsertion_args.location_test = args.location_test
-        # reinsertion_args.test_filter = f"{network_name}"
         reinsertion_args.output_file = extend_filename(
             file=reinsertion_args.file,
             filename_extension=f"_reinserted"
@@ -364,8 +339,6 @@ def _GDM(
         logger.debug(
             "Reinsert parameters:"
             f"\n\tFile: {reinsertion_args.file}"
-            # f"\n\tLocation test: {reinsertion_args.location_test}"
-            # f"\n\tTest filter: {reinsertion_args.test_filter}"
             f"\n\tOutput file: {reinsertion_args.output_file}"
             f"\n\tDF: {new_df_runs}"
         )
@@ -415,17 +388,12 @@ def _GDM(
         )
         return best_runs
 
-    # return pd.concat([best_runs, best_reinsertion_runs], ignore_index=True)
-    # return best_runs
-
 
 method_info = dict(
     description=None,
     citation=None,
     authors=None,
     source="https://github.com/NetworkScienceLab/GDM/",
-    # plot_color=None,
-    # plot_marker=None,
 )
 
 

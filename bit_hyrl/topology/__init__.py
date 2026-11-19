@@ -1,14 +1,4 @@
-"""BiT layer: degree planning, deterministic realisation, diagnostics, sweep.
-
-This subpackage is the *only* place that knows how a bimodal topology is built.
-It never imports the controller or the RL layer, which is what makes the
-topology layer independently evaluable.
-
-Note on naming (D8): the Sarle bimodality coefficient is exported as
-``bc_internal`` / ``bc_internal_betweenness`` and is an **internal diagnostic
-only** — it must never reach a paper figure, a table, or an
-``EvaluationRecord``.  See :mod:`bit_hyrl.topology.diagnostics`.
-"""
+"""BiT layer: degree planning, realisation, diagnostics and the ``c`` sweep."""
 
 from __future__ import annotations
 

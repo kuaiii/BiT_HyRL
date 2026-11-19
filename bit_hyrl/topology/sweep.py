@@ -1,43 +1,4 @@
-"""The ``c`` sensitivity sweep.
-
-``c`` is the single shape knob of the BiT construction, so the honest way to
-report it is a full sweep: one row per grid point, carrying the solved
-``(k_max, k_low, r)`` *and* the realised statistics.
-
-Three boundaries show up in the sweep and all are reported explicitly rather
-than silently absorbed:
-
-* **``c`` is not comparable across graphs.**  ``k_max = round(c·k̄)`` saturates at
-  ``N − 1``, so the crossover ``c_star = (N−1)/k̄`` ranges from ≈17 (BA-100) to
-  ≈84 (BA-500).  Every row therefore carries ``c_star`` and ``c_norm = c/c_star``,
-  and the sensitivity table is keyed on ``c_norm`` with raw ``c`` as a side
-  column.  Holding ``c`` fixed across the nine graphs is *not* a controlled
-  comparison.
-
-  Note that ``c_norm >= 1`` and ``capped_at_n_minus_1`` are not literally the
-  same predicate: rounding means the ceiling is reached once
-  ``c·k̄ >= N − 1.5``, i.e. ``c_norm >= (N − 1.5)/(N − 1)``, which is
-  ``1 − 0.5/(N−1)``.  The test in ``tests/test_sweep_c.py`` states that
-  tolerance explicitly instead of pretending the boundary is exact.
-
-* **``c`` above its effective upper bound.**  Once ``k_max`` reaches ``n - 1``
-  the construction cannot grow any further, so every larger ``c`` yields the same
-  graph.  Each row carries ``capped_at_n_minus_1`` (alias ``capped``).
-
-* **``c`` below its effective lower bound.**  On low mean degree graphs a small
-  ``c`` makes ``k_max <= k_low``, which means the two modes have merged.  The
-  plan solver then rolls back to ``k_max = k_low + 1`` while still conserving
-  ``Σk = 2m``, and the row records ``degenerate_fallback`` (alias
-  ``degenerate``) plus a human-readable ``degenerate_reason``.  The fallback is
-  *recorded*, never hidden: quietly changing ``c`` to something admissible would
-  misreport what was run.
-
-BC is not in this file's output
--------------------------------
-The Sarle coefficient is **abandoned** (D8).  Rows never carry a ``bc_*`` key;
-the internal values live under a single ``"_internal"`` sub-object that no table
-or figure reads, and are only persisted to ``results/diagnostics/**``.
-"""
+"""Sensitivity sweep over the shape parameter ``c``."""
 
 from __future__ import annotations
 
@@ -65,35 +26,12 @@ __all__ = [
     "write_sweep_outputs",
 ]
 
-#: The 12 grid points used in the paper.  Deliberately geometric-ish near 1 and
-#: coarse far above it: the interesting behaviour is ``c`` slightly above 1.
-#:
-#: ⚠️ This grid is **not** a controlled comparison across graphs — see
-#: :data:`C_NORM_GRID`, which is the grid the sensitivity table is actually keyed
-#: on.  ``DEFAULT_C_GRID`` is retained because the design's measured table
-#: is quoted on it and the numeric contract is pinned there.
 DEFAULT_C_GRID: tuple[float, ...] = (1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 3, 4, 6, 10, 20, 50)
 
-#: The normalised grid: 11 points of ``c_norm = c/c_star``, spanning
-#: "narrow band → star → past saturation".
-#:
-#: Sampling on ``c`` is wrong because ``k_max = round(c·k̄)`` saturates at
-#: ``N − 1``, so the *same* ``c`` means a different shape on every graph: on
-#: BA-500 (``c_star = 83.67``) the whole 12-point ``DEFAULT_C_GRID`` only reaches
-#: ``c_norm = 0.598`` and never touches saturation, while BA-100
-#: (``c_star = 17.01``) is already capped at ``c = 20``.  Sampling on ``c_norm``
-#: puts all nine graphs at the **same position on one shape spectrum**, which is
-#: what a controlled comparison requires.
-#:
-#: The last two points (``1.2``, ``1.5``) are deliberately past saturation: they
-#: demonstrate the degeneracy of the ``c``-only view (identical degree sequences,
-#: different raw ``c``).
 C_NORM_GRID: tuple[float, ...] = (
     0.02, 0.05, 0.1, 0.2, 0.35, 0.5, 0.7, 0.85, 1.0, 1.2, 1.5,
 )
 
-#: Column order of the CSV export (and the key set of every row).
-#: ``c_norm`` leads because it, not ``c``, is the comparable quantity.
 SWEEP_FIELDS: tuple[str, ...] = (
     "dataset",
     "c_norm",
@@ -141,27 +79,13 @@ def _resolve(n_or_graph: Any, m: int | None, dataset: str | None) -> tuple[int, 
         name = dataset or str(graph.graph.get("_bit_hyrl_meta", {}).get("name", ""))
         return graph.number_of_nodes(), graph.number_of_edges(), name
     if m is None:
-        raise TypeError("sweep_c(n, m, ...) 需要同时给出 n 与 m（或直接传 nx.Graph）")
+        raise TypeError("sweep_c(n, m, ...) needs both n and m, or an nx.Graph")
     return int(n_or_graph), int(m), dataset or ""
 
 
 def sweep_row(plan: DegreePlan, result: ConstructionResult | None, *,
               dataset: str = "", include_betweenness: bool = False) -> dict[str, Any]:
-    """Assemble one sweep row from a plan and (optionally) its realisation.
-
-    Args:
-        plan: Solved degree plan for this ``c``.
-        result: Construction result, or ``None`` to report the plan alone
-            (cheap mode, no graph is built).
-        dataset: Dataset label written into the row.
-        include_betweenness: Also compute the betweenness BC diagnostic.  The
-            value is stored under ``row["_internal"]`` and never in a flat
-            column, so no table can consume it by accident.
-
-    Returns:
-        A flat ``dict`` with the keys of :data:`SWEEP_FIELDS`, plus a single
-        ``"_internal"`` sub-object (empty when no graph was built).
-    """
+    """Assemble one sweep row from a plan and (optionally) its realisation."""
     row: dict[str, Any] = {
         "dataset": dataset,
         "c_norm": plan.c_norm(),
@@ -261,33 +185,7 @@ def sweep_c(n_or_graph: Any, m: int | None = None,
             enforce_connected: bool = True, max_repair_swaps: int = 20000,
             max_hh_attempts: int = 64, max_rewire_restarts: int = 8,
             include_betweenness: bool = False) -> list[dict[str, Any]]:
-    """Run the ``c`` sweep over one subject graph.
-
-    Two calling conventions are supported so that the design document's
-    ``sweep_c(n, m, ...)`` signature and the task's ``sweep_c(graph, grid)`` both
-    work: pass ``(n, m)`` or pass an :class:`networkx.Graph`.
-
-    Args:
-        n_or_graph: Node count, or the graph itself.
-        m: Edge count (ignored when a graph is passed).
-        c_grid: Grid of hub factors, evaluated in the given order.
-        h: Number of hubs.
-        seed: Root seed for the derived decorrelation/repair streams.
-        dataset: Dataset label used in the row and in the stream tags.
-        build_graphs: If ``False``, only the plan is solved (no graph is built).
-            This is the fast mode used to assert conservation across the grid.
-        realize: Realisation mode, see :func:`~.builder.build_bimodal_graph`.
-        rewire_swaps: Decorrelation budget; ``None`` means the mode default.
-        enforce_connected: Passed through to the builder.
-        max_repair_swaps: Passed through to the builder.
-        max_hh_attempts: Passed through to the builder.
-        max_rewire_restarts: Passed through to the builder.
-        include_betweenness: Compute the betweenness BC diagnostic per row
-            (stored under ``"_internal"`` only).
-
-    Returns:
-        One row per grid point, in grid order.
-    """
+    """Run the ``c`` sweep over one subject graph."""
     n, m_resolved, name = _resolve(n_or_graph, m, dataset)
     rows: list[dict[str, Any]] = []
     for c in c_grid:
@@ -312,18 +210,7 @@ def sweep_c(n_or_graph: Any, m: int | None = None,
 
 
 def c_star_for(n: int, m: int) -> float:
-    """Return ``(n - 1) / k̄`` with ``k̄ = 2m/n``, the saturation crossover.
-
-    ``k_max = round_half_up(c·k̄)`` hits the ceiling ``n - 1`` once ``c`` reaches
-    this value, so ``c_norm = c / c_star_for(n, m)`` is the comparable coordinate.
-
-    Args:
-        n: Node count.
-        m: Edge count.
-
-    Returns:
-        The crossover ``c``, or ``0.0`` when ``m == 0``.
-    """
+    """Return ``(n - 1) / k̄`` with ``k̄ = 2m/n``, the saturation crossover."""
     if n < 1 or m <= 0:
         return 0.0
     k_bar = 2.0 * m / n
@@ -338,46 +225,11 @@ def sweep_c_norm(n_or_graph: Any, m: int | None = None,
                  max_repair_swaps: int = 20000, max_hh_attempts: int = 64,
                  max_rewire_restarts: int = 8,
                  include_betweenness: bool = False) -> list[dict[str, Any]]:
-    """Run the sweep on the **normalised** grid: ``c = c_norm · c_star``.
-
-    This is the controlled comparison.  On ``c_norm`` all nine graphs sit at the
-    same position on one shape spectrum, so a row at ``c_norm = 0.5`` means the
-    same structural situation on BA-100 and on BA-500 — which is not true of a row
-    at ``c = 50`` (capped on BA-100, ``c_norm = 0.598`` on BA-500).
-
-    Because ``k_max = round_half_up(c·k̄)`` and ``c·k̄ = c_norm·(n−1)``, the grid
-    is equivalent to "a hub degree that is a fixed fraction of ``n − 1``".  That
-    identity is what makes the table readable: a column of ``k_max`` across the
-    nine graphs is, up to rounding, the same fraction of ``n − 1``.
-
-    Args:
-        n_or_graph: Node count, or the graph itself.
-        m: Edge count (ignored when a graph is passed).
-        c_norm_grid: Grid of ``c_norm`` values.
-        h: Number of hubs.
-        seed: Root seed.
-        dataset: Dataset label (also names the derived streams).
-        build_graphs: Also construct and diagnose each graph.
-        realize: Realisation mode.
-        rewire_swaps: Decorrelation budget (``None`` = mode default).
-        enforce_connected: Passed through to the builder.
-        max_repair_swaps: Passed through to the builder.
-        max_hh_attempts: Passed through to the builder.
-        max_rewire_restarts: Passed through to the builder.
-        include_betweenness: Compute the betweenness BC diagnostic per row.
-
-    Returns:
-        One row per ``c_norm`` grid point, in grid order.  Each row carries
-        ``c_norm`` (the key), the implied ``c``, ``c_star`` and ``capped``.
-
-    Raises:
-        ValueError: If ``c_star`` is ``0`` (a graph with no edges has no shape
-            spectrum to sweep).
-    """
+    """Run the sweep on the **normalised** grid: ``c = c_norm · c_star``."""
     n, m_resolved, name = _resolve(n_or_graph, m, dataset)
     star = c_star_for(n, m_resolved)
     if star <= 0.0:
-        raise ValueError(f"{name or 'graph'} 没有边（m={m_resolved}），c_star=0，无法归一化扫描")
+        raise ValueError(f"{name or 'graph'} has no edges (m={m_resolved}), c_star=0, cannot normalise")
 
     rows: list[dict[str, Any]] = []
     for c_norm in c_norm_grid:
@@ -399,10 +251,6 @@ def sweep_c_norm(n_or_graph: Any, m: int | None = None,
         row = sweep_row(
             plan, result, dataset=name, include_betweenness=include_betweenness
         )
-        # `c_norm` is the grid coordinate and `c` its side column; the rows carry
-        # exactly :data:`SWEEP_FIELDS` so the CSV schema stays single-sourced.
-        # The identity k_max = round_half_up(c_norm · (n−1)) is asserted in
-        # tests/test_sweep_c_norm.py rather than duplicated into the row.
         rows.append(row)
     return rows
 
@@ -412,22 +260,7 @@ def sweep_dataset_c_norm(dataset: str, c_norm_grid: Sequence[float] = C_NORM_GRI
                          realize: str = "hh+rewire", rewire_swaps: int | None = None,
                          data_root: str | Path | None = None,
                          include_betweenness: bool = False) -> list[dict[str, Any]]:
-    """Run the normalised sweep on a pinned dataset.
-
-    Args:
-        dataset: Dataset name, e.g. ``"Cogentco"``.
-        c_norm_grid: ``c_norm`` grid.
-        h: Number of hubs.
-        seed: Root seed.
-        build_graphs: Whether to construct and diagnose the graphs.
-        realize: Realisation mode.
-        rewire_swaps: Decorrelation budget (``None`` = mode default).
-        data_root: Override of the default data directory (tests only).
-        include_betweenness: Compute the betweenness BC diagnostic per row.
-
-    Returns:
-        One row per ``c_norm`` grid point.
-    """
+    """Run the normalised sweep on a pinned dataset."""
     source = io_paths.dataset_path(dataset, data_root=data_root)
     graph = load_graph(source)
     return sweep_c_norm(
@@ -442,22 +275,7 @@ def sweep_dataset(dataset: str, c_grid: Sequence[float] = DEFAULT_C_GRID,
                   realize: str = "hh+rewire", rewire_swaps: int | None = None,
                   data_root: str | Path | None = None,
                   include_betweenness: bool = False) -> list[dict[str, Any]]:
-    """Run the ``c`` sweep on a pinned dataset in ``dataset/testdata``.
-
-    Args:
-        dataset: Dataset name, e.g. ``"Cogentco"``.
-        c_grid: Hub-factor grid.
-        h: Number of hubs.
-        seed: Root seed.
-        build_graphs: Whether to construct and diagnose the graphs.
-        realize: Realisation mode.
-        rewire_swaps: Decorrelation budget (``None`` = mode default).
-        data_root: Override of the default data directory (tests only).
-        include_betweenness: Compute the betweenness BC diagnostic per row.
-
-    Returns:
-        One row per grid point.
-    """
+    """Run the ``c`` sweep on a pinned dataset in ``dataset/testdata``."""
     source = io_paths.dataset_path(dataset, data_root=data_root)
     graph = load_graph(source)
     return sweep_c(
@@ -469,29 +287,10 @@ def sweep_dataset(dataset: str, c_grid: Sequence[float] = DEFAULT_C_GRID,
 def write_sweep_outputs(rows: Iterable[dict[str, Any]], dataset: str, *,
                         out_dir: str | Path | None = None,
                         stem: str = "sweep_c") -> dict[str, Path]:
-    """Write the sweep as canonical JSON and as CSV.
-
-    The JSON keeps the nested structures (``degree_histogram``, ``peak_structure``)
-    intact and keeps ``"_internal"``; the CSV flattens everything a *table* may
-    read and drops the ``"_internal"`` sub-object entirely.
-
-    Args:
-        rows: Sweep rows (as produced by :func:`sweep_c` or :func:`sweep_c_norm`).
-        dataset: Dataset label, used for the output directory.
-        out_dir: Override of ``results/sweep/<dataset>``.
-        stem: File stem.  ``c``-keyed and ``c_norm``-keyed sweeps must not
-            overwrite each other, so :func:`sweep_c_norm` callers pass
-            ``"sweep_c_norm"``.
-
-    Returns:
-        ``{"json": path, "csv": path}``.
-
-    Raises:
-        ValueError: If ``rows`` is empty.
-    """
+    """Write the sweep as canonical JSON and as CSV."""
     materialised = [dict(row) for row in rows]
     if not materialised:
-        raise ValueError("sweep 结果为空，拒绝写文件")
+        raise ValueError("empty sweep result, refusing to write")
 
     directory = Path(out_dir) if out_dir is not None else io_paths.sweep_dir(dataset)
     directory.mkdir(parents=True, exist_ok=True)

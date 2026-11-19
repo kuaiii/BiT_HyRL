@@ -43,9 +43,6 @@ aggregatorID = 0  # 0:sum; 1:mean; 2:GCN
 embeddingMethod = 1  # 0:structure2vec; 1:graphsage
 
 
-# ------------------------------------------------------------------
-# 1. Graph data structures (replaces graph.pyx)
-# ------------------------------------------------------------------
 class Graph:
     def __init__(self, num_nodes=0, num_edges=0, edges_from=None, edges_to=None):
         self.num_nodes = num_nodes
@@ -77,9 +74,6 @@ class GSet:
         self.graph_pool.clear()
 
 
-# ------------------------------------------------------------------
-# 2. MvcEnv (replaces mvc_env.pyx)
-# ------------------------------------------------------------------
 class MvcEnv:
     def __init__(self, norm):
         self.norm = norm
@@ -135,9 +129,6 @@ class MvcEnv:
         return random.choice(self.avail_list)
 
 
-# ------------------------------------------------------------------
-# 3. PrepareBatchGraph (replaces PrepareBatchGraph.pyx)
-# ------------------------------------------------------------------
 class PrepareBatchGraph:
     def __init__(self, aggregatorID=0):
         self.aggregatorID = aggregatorID
@@ -346,9 +337,6 @@ class PrepareBatchGraph:
         self.SetupGraphInput(idxes, g_list, covered, None)
 
 
-# ------------------------------------------------------------------
-# 4. Utils (replaces utils.pyx) - only inference helpers
-# ------------------------------------------------------------------
 class Utils:
     def __init__(self):
         self.MaxWccSzList = []
@@ -387,8 +375,6 @@ class Utils:
         return sum(self.MaxWccSzList) / n
 
     def reInsert(self, graph, solution, allVex, strategyID, reinsertEachStep):
-        # Simplified reinsertion: try adding back nodes that don't increase max CC
-        # This is a heuristic approximation of the original C++ implementation
         n = graph.num_nodes
         adj = [set(nei) for nei in graph.adj_list]
         removed = set(solution)
@@ -398,8 +384,6 @@ class Utils:
         current_removed = set(solution)
         for node in solution:
             current_removed.discard(node)
-            # Check if adding back is OK
-            # Use DSU to find max CC
             parent = list(range(n))
             size = [1] * n
 
@@ -437,9 +421,6 @@ class Utils:
         return final_sol
 
 
-# ------------------------------------------------------------------
-# 5. FINDER_Pure (replaces FINDER.pyx, inference only)
-# ------------------------------------------------------------------
 class FINDER_Pure:
     def __init__(self):
         self.embedding_size = EMBEDDING_SIZE

@@ -1,20 +1,7 @@
-"""input_sweep_fallback.py —— 空窗口格的下界回退设计实测（图 2 的空窗段数据源）。
+"""Fallback designs for cells whose feasible window is empty (Fig. 2).
 
-``input_sweep.py`` 只在可行域 [lo, hi] 内造图；窗口为空（hi < lo）时它只记下
-lo/hi 与 e0/f0，不留任何性能数字。图 2 要把曲线从非空窗口延续到空窗口（虚线 +
-空心点），就必须知道回退设计 ``k_max = k^-`` 处的 E/E0 与 f/f0，因此单开这支脚本：
-
-  * 输入仍是 ``input_sweep.csv`` 里 status == "empty" 的那些格；
-  * 对每个这样的格，按 paper §3.3 的回退规则取 ``k_max = lo``（单枢纽、其余层尽量
-    均匀），造图（两个 realization seed）并在四个移除种子上实测 E、f_c^ran、f_c^tar；
-  * 同时算出题注里报的放松因子 lambda* = k^-(k^-+3) / (2(n-1)E0)。
-
-重要：这些数字 **不参与** 正文三档区间与"几何中点 vs 最优点"的差距统计——那里
-只统计非空窗口。它们只用来画回退设计的实际表现。
-
-用法：
-    python input_sweep_fallback.py --in results/input_sweep.csv \
-        --out results/input_sweep_fallback.csv
+Uses ``k_max = lo`` for those cells and measures ``E`` and ``f_c`` so the curves
+can be extended beyond the non-empty window.
 """
 
 from __future__ import annotations
@@ -46,7 +33,7 @@ def fallback_rows(n: int, kbar: float, lo: int, hi: int, e0: float, f0: float,
         fts.append(got["ft"])
     if not es:
         return [dict(n=n, kbar=kbar, k=lo, lo=lo, hi=hi, e0=e0, f0=f0,
-                     status="unbuildable", why="build_seq 全部失败")]
+                     status="unbuildable", why="build_seq failed for every candidate")]
 
     e = sum(es) / len(es)
     fr = sum(frs) / len(frs)

@@ -1,29 +1,8 @@
-"""Approximate reproduction of Eff-R-Net (Huang, Wu & Li, *Inf. Sci.* 690, 2024).
+"""Approximate implementation of Eff-R-Net (Huang, Wu & Li, Inf. Sci. 690, 2024).
 
-.. warning::
-
-   **NOT the official implementation.**  The paper's full text (exact operator
-   formulae, the self-adaptive update rules, the hyper-parameters in its Tables 1/4,
-   and the "simplified robustness" estimator) is behind a paywall, and no public code
-   exists.  This module re-implements the *operators as described in the abstract* on a
-   best-effort basis:
-
-   * a **three-part composite crossover** (a swap informed by the global best, one
-     random swap, and an onion-biased swap),
-   * an **onion-like mutation** that prefers degree-assortative (high--high) rewiring,
-   * **LocalSearchA** (greedy fitness-driven diversity) and **LocalSearchB** (onion
-     construction),
-   * **adaptive operator probabilities** (a successful operator becomes more likely).
-
-   The evolutionary fitness uses a *cheap* approximation of the robustness ``R``
-   (GCC area on a coarse degree-targeted removal grid) in place of the paper's
-   simplified estimator.  The **returned graph** is then scored by the very same
-   cascade/metrics as every other method, so the comparison itself is consistent.
-
-All rewiring is a degree-preserving 2-switch that keeps the graph simple and connected,
-so ``N`` and ``M`` are preserved (the T10 contract for topology baselines).  The whole
-search runs under :func:`bit_hyrl.baselines._common.seeded_legacy`, so a fixed
-``seed`` is bit-reproducible and the global RNG is restored on exit.
+The original code is not public; this port follows the published description of
+the three operators (two-switch, onion-swap and three-part crossover) and is
+labelled as an approximation wherever its numbers are reported.
 """
 
 from __future__ import annotations
@@ -104,13 +83,7 @@ def _onion_swap(graph: nx.Graph, trials: int = 8) -> nx.Graph:
 
 
 def _three_part_crossover(child: nx.Graph, best: nx.Graph) -> nx.Graph:
-    """Approximate three-part composite crossover.
-
-    (1) a swap informed by the global best (accept a 2-switch that moves the child
-    toward the best's assortativity), (2) one random 2-switch, (3) an onion-biased
-    (reverse-of-worst) swap.
-    """
-    # Part 1 — move toward the global best's degree mixing.
+    """Approximate three-part composite crossover."""
     target = _degree_assort(best)
     improved = child
     for _ in range(6):
@@ -118,9 +91,7 @@ def _three_part_crossover(child: nx.Graph, best: nx.Graph) -> nx.Graph:
         if abs(_degree_assort(candidate) - target) < abs(_degree_assort(improved) - target):
             improved = candidate
             break
-    # Part 2 — random exploration.
     improved = _two_switch(improved)
-    # Part 3 — onion-biased interchange (reverse of the poorest structure).
     improved = _onion_swap(improved, trials=4)
     return improved
 
@@ -161,7 +132,6 @@ def construct(G: nx.Graph, *, seed: int = 0, pop: int = 20, gen: int = 30,
         best_index = max(range(len(population)), key=lambda i: fitness[i])
         best_graph, best_fit = population[best_index], fitness[best_index]
 
-        # adaptive operator probabilities
         weights = {"cross": 0.40, "mut": 0.30, "lsA": 0.15, "lsB": 0.15}
         names = list(weights)
 
@@ -188,12 +158,11 @@ def construct(G: nx.Graph, *, seed: int = 0, pop: int = 20, gen: int = 30,
                     child = _onion_swap(child)
                 elif operator == "lsA":
                     child = _greedy_local(child, steps)
-                else:  # lsB
+                else:
                     child = _onion_swap(_onion_swap(child))
                 child_fit = _fast_robustness(child, steps)
                 survivors.append(child)
                 survivor_fit.append(child_fit)
-                # adaptive: reward the operator according to success
                 if child_fit > parent_fit:
                     weights[operator] *= 1.10
                 else:

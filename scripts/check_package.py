@@ -1,19 +1,11 @@
-"""Integrity check for this package — standard library only, no dependencies.
+"""Integrity check for this package; standard library only.
 
-Every number the manuscript prints is recomputed here from the archived tables, so a
-reviewer can confirm that the shipped data still supports the published claims without
-installing numpy/pandas or re-running a single simulation.
+Recomputes every number the manuscript reports from the archived tables.
 
-Usage
------
-::
+Usage::
 
-    python scripts/check_package.py          # full check, exit code 0 == all green
-    python scripts/check_package.py -v       # also print the individual figures
-
-The checks are deliberately narrow: they pin the headline values of the paper
-(R_res = 0.4040, +0.062 over UNITY = 18.1%, Holm-corrected p = 1.6e-5), the size of
-every experiment grid, and the presence of every figure/table file.
+    python scripts/check_package.py        # exit code 0 when all checks pass
+    python scripts/check_package.py -v     # also print each value
 """
 
 from __future__ import annotations
@@ -27,18 +19,18 @@ RESULTS = ROOT / "results"
 FIGURES = ROOT / "figures"
 TABLES = ROOT / "paper_tables"
 
-#: Headline values of the manuscript (§5.11 and Table 6 / Table 7).
-R_RES_BIT = 0.4039638666160048   # BiT-HyRL, mean over the thirty topologies
-R_RES_UNITY = 0.3419709509332758  # UNITY, same thirty topologies
+#: Headline values reported in Table 6 and Table 7.
+R_RES_BIT = 0.4039638666160048
+R_RES_UNITY = 0.3419709509332758
 PAIRED_D_UNITY = 0.06199291568272903
 PAIRED_P_UNITY = 1.5519598063386763e-05
-RELATIVE_GAIN = 0.1813            # 0.062 / 0.342, quoted as 18.1 % in the text
+RELATIVE_GAIN = 0.1813
 
-#: Rows of Table 6 that are external methods (must be significantly beaten).
+#: Rows of Table 6 that are external methods, each of which the method must beat.
 EXTERNAL = ("UNITY", "QDLM", "FRED-ABL", "Eff-R-Net", "ONION",
             "ROMEN", "MWCL", "MADQN", "KMedian", "Random-pl.")
 
-#: The seven figures of the manuscript, by the file name used in main.tex.
+#: The seven figures of the manuscript, by the name used in the LaTeX source.
 FIGURE_FILES = (
     "Theory Foundation.pdf",
     "fig_input_sensitivity.pdf",

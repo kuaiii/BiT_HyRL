@@ -55,9 +55,6 @@ class NetworkDismantleEnv:
         self.done: bool = False
         self.last_obs: Optional[Dict[str, Any]] = None
 
-    # -----------------------------------------------------------------------
-    # Helpers
-    # -----------------------------------------------------------------------
     def _gcc_size(self, G: nx.Graph) -> int:
         if G.number_of_nodes() == 0:
             return 0
@@ -261,9 +258,6 @@ class NetworkDismantleEnv:
 
         return x
 
-    # -----------------------------------------------------------------------
-    # Gym-like interface
-    # -----------------------------------------------------------------------
     def reset(self, G: nx.Graph, agent_node: Optional[int] = None) -> Dict[str, Any]:
         # Relabel nodes to contiguous 0..n-1 to ensure tensor indices are valid
         if G.number_of_nodes() > 0:
@@ -387,8 +381,6 @@ class NetworkDismantleEnv:
             self.edge_index = to_undirected(ei)
         else:
             self.edge_index = torch.zeros((2, 0), dtype=torch.long, device=self.device)
-        # num_nodes stays as the original graph size (node IDs are preserved)
-        # removed_mask stays the same size; dynamics uses original node IDs
 
         # Ensure agent still exists
         if self.agent_node not in self.G_nx:

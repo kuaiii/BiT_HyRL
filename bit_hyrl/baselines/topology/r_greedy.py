@@ -1,22 +1,6 @@
-"""R-GREEDY topology baseline -- Schneider-style greedy robustness optimisation.
+"""R-GREEDY robustness optimisation.
 
-Reference: Schneider, Moreira, Andrade, Havlin & Herrmann, *Mitigation of malicious
-attacks on networks*, PNAS 108(10):3838-3841 (2011).
-
-The published method repeatedly picks, from a pool of random **degree-preserving**
-double-edge swaps, the one that improves the robustness ``R`` most, and stops when no
-candidate improves.  That is exactly what this module does, so it is the canonical
-"search on a fixed budget" opponent for a one-shot construction such as BiT:
-
-* same ``N``, same ``M``, same degree sequence as the input (``M`` is preserved by
-  the 2-switch, so no baseline gets to buy robustness with extra links);
-* connectivity is a hard constraint (see :func:`_rewire.propose_swap`);
-* the fitness is :func:`effrnet._fast_robustness` -- the same cheap ``R`` (GCC/N area
-  on a degree-targeted removal grid) the Eff-R-Net baseline already optimises.
-
-``budget`` counts **robustness evaluations**, not swaps: the number is written to
-``graph.graph["search_evals"]`` so the paper can state the evaluation budget next to
-BiT's *one* construction instead of comparing incomparable "iterations".
+Reference: Schneider, Moreira, Andrade, Havlin & Herrmann, PNAS 108(10), 2011.
 """
 
 from __future__ import annotations
@@ -59,7 +43,7 @@ def construct(
                 if candidate_r > best_r + 1e-12:
                     best, best_r, best_edges = candidate, candidate_r, candidate_edges
             rounds += 1
-            if best is None:  # local optimum under this neighbourhood
+            if best is None:
                 break
             current, current_r, edges = best, best_r, best_edges
 

@@ -139,12 +139,6 @@ def GND(network: Graph,
         ):
     static_id = network.vertex_properties["static_id"]
 
-    # network_fd, network_path = mkstemp()
-    # broken_fd, broken_path = mkstemp()
-    # output_fd, output_path = mkstemp()
-    #
-    # tmp_file_handles = [network_fd, broken_fd, output_fd]
-    # tmp_file_paths = [network_path, broken_path, output_path]
 
     nodes = []
     output = np.zeros(network.num_vertices())
@@ -299,8 +293,6 @@ def GNDR(network: Graph,
         # Reset the file pointer to the beginning of the file
         output_fd.seek(0)
 
-        # Read the output file
-        # Count the number of lines
         num_removals = 0
         for _ in output_fd.readlines():
             num_removals += 1

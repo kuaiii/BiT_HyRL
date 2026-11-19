@@ -1,56 +1,7 @@
-"""Single-valued controller assignment with a strict total order.
+"""Single-valued controller assignment with a deterministic tie-break order.
 
-Five properties, all of them asserted rather than assumed:
-
-**A. Single-valued (mutually exclusive).**
-Every switch node has exactly one owner.  ``len(owner) + len(unassigned) ==
-n_switches`` and the two sets are disjoint, so a node can be either owned once or
-unowned, never owned twice.  ``Assignment.is_single_valued`` is ``True`` by
-construction; the test-suite recomputes it independently.
-
-**B. Deterministic total order.**
-Candidates are the triples ``(dist, node_id, controller_id)`` consumed in
-ascending order — distance first, then node id, then controller id.  No
-implementation here iterates a ``dict`` or a ``set`` in a way that can influence a
-decision; the input node order therefore cannot change the output, which is
-exactly what ``test_assignment_determinism.py`` shuffles to check.
-
-**C. Complexity.**
-One BFS per controller (``O(n_c · (N + M))``) plus ``O(N · n_c log(n_c))`` for the
-sort.  Milliseconds on BA-500.
-
-**D. Overflow spill and excess relocation.**
-A switch that cannot fit its nearest controller **spills to the next-nearest one
-with room** (this is the "capacity overflow" behaviour, not an error).  When a
-controller is overdrawn, :func:`reassign_excess` moves its surplus nodes to the
-nearest controller that still has room; nodes with nowhere to go become
-unassigned and the caller treats them as failed.
-
-**E. Never load-balance — the H_C metric depends on it.**
-This is a hard constraint, not a default.  ``H_C`` measures the
-**evenness of the load shares** ``L_j / ΣL``; a balancing assignment would drive
-it to ``1`` by construction and destroy the metric's discriminating power — every
-topology, every ``c`` and every degree of attack severity would score the same.
-The assignment is therefore **minimal-deviation**: nearest first, and a switch
-moves only when capacity forces it to.  Concretely:
-
-* a switch is never moved to a farther controller while a nearer one has room;
-* an overdrawn controller never sheds load "for fairness" — only its *surplus*
-  beyond ``C`` is shed, and it is shed farthest-served-first;
-* no global objective (max-min load, sum of latencies, variance) is ever solved.
-
-If a future change makes ``H_C`` collapse to a constant, the cause is a violation
-of this paragraph, not a property of the network.
-
-Two deliberate reading choices are documented where they occur, because the
-specification leaves them open:
-
-* which nodes an overdrawn controller gives up — :func:`reassign_excess` evicts
-  the **farthest-served first** (``-dist`` then ``node_id``); evicting the
-  best-served node to a *farther* controller would be irrational;
-* :attr:`Assignment.order_used` records the whole total order, but
-  :meth:`Assignment.to_dict` reports only its length so that a 500-node record
-  does not carry 22 500 triples.
+Every switch is served by exactly one controller, and the assignment is a pure
+function of the graph, the controller set and the tie-break rule.
 """
 
 from __future__ import annotations
@@ -75,20 +26,7 @@ _UNREACHABLE = 10**9
 
 @dataclass(frozen=True)
 class Assignment:
-    """A single-valued switch → controller map.
-
-    Attributes:
-        owner: ``switch_id -> controller_id``.
-        loads: ``controller_id -> L_j`` (in units of ``demand``).
-        unassigned: Switches with no controller (every candidate was full).
-        order_used: The full ``(dist, node_id, controller_id)`` total order, as
-            consumed.  ``to_dict`` reports only the length.
-        is_single_valued: Always ``True``; kept as a field so callers can assert.
-        controllers: Controller ids, ascending.
-        capacity: The ``C`` this assignment was built against.
-        demand: Per-switch demand.
-        enforce_capacity: Whether the capacity ceiling was applied.
-    """
+    """A single-valued switch → controller map."""
 
     owner: dict[int, int]
     loads: dict[int, int]
@@ -123,23 +61,11 @@ class Assignment:
 
 
 def bfs_rows(graph: nx.Graph, controllers: Sequence[int]) -> dict[int, dict[int, int]]:
-    """Return ``{controller: {node: distance}}`` for every controller in one sweep.
-
-    Args:
-        graph: Undirected graph.
-        controllers: Controller node ids (already validated to exist).
-
-    Returns:
-        A dict of BFS distance maps.  Nodes a controller cannot reach are simply
-        absent.
-
-    Raises:
-        CapacityError: If a controller is not a node of ``graph``.
-    """
+    """Return ``{controller: {node: distance}}`` for every controller in one sweep."""
     rows: dict[int, dict[int, int]] = {}
     for controller in controllers:
         if controller not in graph:
-            raise CapacityError(f"控制器 {controller} 不在图里（n={graph.number_of_nodes()}）")
+            raise CapacityError(f"controller {controller} is not in the graph (n={graph.number_of_nodes()})")
         rows[int(controller)] = dict(nx.single_source_shortest_path_length(graph, controller))
     return rows
 
@@ -147,33 +73,13 @@ def bfs_rows(graph: nx.Graph, controllers: Sequence[int]) -> dict[int, dict[int,
 def assign_single_controller(graph: nx.Graph, controllers: Sequence[int],
                              model: CapacityModel, *,
                              enforce_capacity: bool = True) -> Assignment:
-    """Assign every switch to one controller, nearest first with spill-over.
-
-    Args:
-        graph: Evaluated graph; controllers must be nodes of it.
-        controllers: Controller node ids (duplicates collapse, order irrelevant).
-        model: Solved :class:`~bit_hyrl.control.capacity.CapacityModel`.
-        enforce_capacity: When ``True`` (default) a switch spills to the next
-            nearest controller with room and never exceeds ``C``.  When
-            ``False`` every switch simply takes its nearest controller, which can
-            overload — that is the *diagnostic* profile
-            :func:`~bit_hyrl.control.capacity.probe_max_utilisation` reports,
-            because a capacity-feasible profile has ``U_j <= 1`` by construction
-            and would answer "does θ bind?" with a tautology.
-
-    Returns:
-        A single-valued :class:`Assignment`.
-
-    Raises:
-        CapacityError: If a controller is not a node of ``graph``, or if the
-            controller set covers every node (no switches left to assign).
-    """
+    """Assign every switch to one controller, nearest first with spill-over."""
     ordered = tuple(sorted({int(node) for node in controllers}))
     if not ordered:
-        raise CapacityError("controllers 为空，无法指派")
+        raise CapacityError("controllers is empty, nothing to assign")
     missing = [node for node in ordered if node not in graph]
     if missing:
-        raise CapacityError(f"控制器 {missing} 不在图里（n={graph.number_of_nodes()}）")
+        raise CapacityError(f"controller {missing} is not in the graph (n={graph.number_of_nodes()})")
 
     node_list = sorted(int(node) for node in graph.nodes())
     controller_set = set(ordered)
@@ -183,7 +89,6 @@ def assign_single_controller(graph: nx.Graph, controllers: Sequence[int],
 
     dist = bfs_rows(graph, ordered)
 
-    # The deterministic total order: distance, then node id, then controller id.
     triples: list[tuple[int, int, int]] = []
     for node in switch_set:
         for controller in ordered:
@@ -210,7 +115,7 @@ def assign_single_controller(graph: nx.Graph, controllers: Sequence[int],
         and set(owner.values()) <= set(ordered)
     )
     if not single_valued:  # pragma: no cover - structural guarantee
-        raise CapacityError("指派不是单值的：内部一致性检查失败")
+        raise CapacityError("assignment is not single-valued: internal consistency check failed")
 
     return Assignment(
         owner=owner,
@@ -229,31 +134,7 @@ def reassign_excess(graph: nx.Graph, assignment: Assignment, model: CapacityMode
                     alive_nodes: Iterable[int] | None = None,
                     controllers_alive: Iterable[int] | None = None
                     ) -> tuple[Assignment, int]:
-    """Relocate the surplus of overdrawn controllers.
-
-    Nodes whose owner is dead, or which can no longer reach their owner, are
-    treated as pending too, so a single call covers both "the controller is
-    overdrawn" and "the network moved underneath the assignment".
-
-    Eviction order is **farthest-served first** then node id: a controller gives
-    up the nodes it serves worst, because moving a well-served node to a farther
-    controller would raise latency for no gain.
-
-    Args:
-        graph: Full graph (edges are used for distances).
-        assignment: The current assignment.
-        model: Solved capacity model (``capacity`` and ``demand`` are used).
-        alive_nodes: Surviving nodes; defaults to every node of ``graph``.
-        controllers_alive: Surviving controllers; defaults to
-            ``assignment.controllers``.
-
-    Returns:
-        ``(new_assignment, moved)`` where ``moved`` counts nodes that found a new
-        controller.  Nodes that found none end up in ``new_assignment.unassigned``.
-
-    Raises:
-        CapacityError: If no controller survives.
-    """
+    """Relocate the surplus of overdrawn controllers."""
     alive = set(int(node) for node in graph.nodes()) if alive_nodes is None else {
         int(node) for node in alive_nodes
     }
@@ -263,7 +144,7 @@ def reassign_excess(graph: nx.Graph, assignment: Assignment, model: CapacityMode
         else tuple(sorted({int(c) for c in controllers_alive if int(c) in alive}))
     )
     if not survivors:
-        raise CapacityError("全部控制器失效，reassign_excess 无目标可指派")
+        raise CapacityError("every controller is down, reassign_excess has nowhere to assign")
 
     capacity = int(model.capacity)
     demand = int(model.demand)
@@ -271,10 +152,6 @@ def reassign_excess(graph: nx.Graph, assignment: Assignment, model: CapacityMode
 
     owner: dict[int, int] = {}
     loads: dict[int, int] = {controller: 0 for controller in survivors}
-    # Nodes already known to have no owner (e.g. their controller died before this
-    # call) must be retried, not ignored: they carry demand that no ``loads``
-    # entry accounts for, so skipping them would let an over-capacity component
-    # look converged.
     pending: list[int] = [int(node) for node in assignment.unassigned if int(node) in alive]
 
     for node in sorted(assignment.owner):
@@ -286,7 +163,6 @@ def reassign_excess(graph: nx.Graph, assignment: Assignment, model: CapacityMode
         owner[node] = controller
         loads[controller] += demand
 
-    # -- evict the surplus of every overdrawn controller -------------------- #
     for controller in survivors:
         while loads[controller] > capacity:
             candidates = [node for node, held_by in owner.items() if held_by == controller]
@@ -300,7 +176,6 @@ def reassign_excess(graph: nx.Graph, assignment: Assignment, model: CapacityMode
             loads[controller] -= demand
             pending.append(worst)
 
-    # -- place the pending nodes, node id ascending for determinism --------- #
     moved = 0
     unassigned: list[int] = []
     for node in sorted(set(pending)):

@@ -1,9 +1,7 @@
-"""FRED-ABL topology baseline — ported from ``network_construction/FRED_ABL/fred_abl_optimization.py``.
+"""FRED-ABL baseline: Bayesian search over a geometric candidate edge set.
 
-Logic copied in (``_fred_impl``); no import of the old tree (the unused
-``src.utils.logger`` import is dropped in the impl).  Requires node positions;
-nodes are normalised to ``0..n-1`` with ``pos`` in ``[0, 1]`` before the Bayesian
-search, matching the original adapter.  Depends on scikit-learn + scipy.
+Node positions are required; they are normalised to ``0..n-1`` with ``pos`` in
+``[0, 1]`` before the search.  Depends on scikit-learn and scipy.
 """
 
 from __future__ import annotations

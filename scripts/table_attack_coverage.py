@@ -1,16 +1,7 @@
-"""Regenerate the attack-coverage table body (Table 11) from the shipped merged table.
+"""Regenerate the attack-coverage table body (Table 11) from the merged table.
 
-``attack_coverage.py`` rebuilds the merged table itself, but that path needs the
-per-cell shard directory (``results/attack_cov*``) and the per-cell JSON records,
-which are not part of this package.  The merged table *is* shipped, so this wrapper
-re-uses the same formatting function and only skips the merging step.
-
-Usage
------
-::
-
-    python scripts/table_attack_coverage.py                 # -> paper_tables/tab_attack_coverage.tex
-    python scripts/table_attack_coverage.py --out paper_tables
+``attack_coverage.py`` needs the per-cell shards, which are not shipped; this
+wrapper reuses its formatting function on the merged table alone.
 """
 
 from __future__ import annotations

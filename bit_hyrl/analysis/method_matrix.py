@@ -47,16 +47,10 @@ def _evaluate_one(
     c: float,
     h: int,
 ) -> list[dict[str, Any]]:
-    """Worker body for one ``(spec, method)``: construct -> place -> evaluate per attack.
-
-    Module-level and pickle-friendly (``spec`` is a plain dict, ``checkpoint`` a
-    path string); a worker loads the PPO policy from ``checkpoint`` itself so the
-    main process need not.  Order of returned rows is ``seed`` then ``attack``,
-    matching the serial loop exactly.
-    """
+    """Worker body for one ``(spec, method)``: construct -> place -> evaluate per attack."""
     entry = METHODS.get(method_name)
     if entry is None:
-        raise KeyError(f"未知方法 {method_name!r}；可用 {list(METHODS)}")
+        raise KeyError(f"unknown method {method_name!r}; available: {list(METHODS)}")
     construct = entry["construct"]
     place = entry["place"]
     topology_label = _topology_label(construct)
@@ -85,9 +79,9 @@ def _evaluate_one(
                     h=h,
                 )
                 rows.append(_record_row(record))
-    except Exception as exc:  # surface dataset + method for easy localisation
+    except Exception as exc:
         raise RuntimeError(
-            f"method-matrix worker 失败: dataset={dataset!r} method={method_name!r}: {exc}"
+            f"method-matrix worker failed: dataset={dataset!r} method={method_name!r}: {exc}"
         ) from exc
     return rows
 
@@ -122,15 +116,10 @@ def run_method_matrix(
     h: int = 1,
     workers: int = 1,
 ) -> pd.DataFrame:
-    """Evaluate every ``(graph, method, attack, seed)`` and return the long table.
-
-    ``workers <= 1`` runs the original serial double loop verbatim.  ``workers > 1``
-    fans the ``(spec, method)`` tasks out to a process pool (``executor.map`` keeps
-    order, so the flattened rows are identical to the serial run).
-    """
+    """Evaluate every ``(graph, method, attack, seed)`` and return the long table."""
     need_ppo = any(METHODS[name]["place"] == "ppo" for name in methods if name in METHODS)
     if need_ppo and checkpoint is None:
-        raise ValueError("methods 含 ppo 放置（如 BiT-HyRL），需要 checkpoint")
+        raise ValueError("methods include a ppo placement (e.g. BiT-HyRL), which needs a checkpoint")
 
     if workers <= 1:
         policy_obj = load_policy(checkpoint) if need_ppo else None
@@ -141,7 +130,7 @@ def run_method_matrix(
             for name in methods:
                 entry = METHODS.get(name)
                 if entry is None:
-                    raise KeyError(f"未知方法 {name!r}；可用 {list(METHODS)}")
+                    raise KeyError(f"unknown method {name!r}; available: {list(METHODS)}")
                 construct = entry["construct"]
                 place = entry["place"]
                 topology_label = _topology_label(construct)

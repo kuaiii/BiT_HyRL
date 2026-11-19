@@ -1,8 +1,7 @@
-"""QDLM topology baseline — ported from ``network_construction/QDLM/qdlm_optimization.py``.
+"""QDLM baseline: quantum-inspired learning model over a geometric candidate edge set.
 
-Logic copied in (``_qdlm_impl``); no import of the old tree.  Requires node
-positions; nodes are normalised to ``0..n-1`` with ``pos`` in ``[0, 1]`` before the
-quantum-learning search.  Only numpy + networkx are required.
+Node positions are required; they are normalised to ``0..n-1`` with ``pos`` in
+``[0, 1]`` before the search.
 """
 
 from __future__ import annotations

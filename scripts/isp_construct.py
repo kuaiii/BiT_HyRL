@@ -1,24 +1,7 @@
 #!/usr/bin/env python3
-"""在真实 ISP 的 (N, M) 上"真正把图造出来"，实测 E 与渗流 f_c，和闭式比对。
+"""Construct the ISP graphs at their real ``(N, M)`` and measure percolation.
 
-为什么要造图：手里只有每张 ISP 拓扑的 (N, M)（Zoo 的 PoP 级与光网络物理层），
-没有边表，所以无法直接测原图。但设计问题问的正是"在这个规模、这个预算下，
-应该造哪一种结构"，因此可以把同 (N, M) 的四种族都造出来，用同一个度量比较：
-
-    hub1(K)   单枢纽 + 近正则残余（论文族，c = K/<k>）
-    flower(h)  h 个枢纽 + 叶子各挂一个（低密度族的替代）
-    circ       近正则环 + 弦（"无枢纽"极限）
-    rand       随机连通图（同一预算下的最大熵零模型）
-
-度量：
-    E      = 1/(N(N-1)) Σ 1/d(s,t)          BFS 精确算
-    f_c    渗流阈值                         反向并查集 + 平均巨分量曲线
-    R      = ½(f_c^rand + f_c^tar)          与论文 (7.64)-(7.66) 同一口径
-
-用法：
-    python isp_construct.py --selftest
-    python isp_construct.py --table --csv isp_design.csv
-    python isp_construct.py --isp COGENTCO --detail
+Compares the measured ``E`` and ``f_c`` against the closed-form estimates.
 """
 from __future__ import annotations
 
@@ -35,10 +18,7 @@ import domain_map as dm
 
 EPS = 1e-12
 
-# ------------------------------------------------------------------ ISP 表
-# (name, N, M, kind)   kind: pop = PoP 级 ISP, opt = 光网络物理层
 ISP: List[Tuple[str, int, int, str]] = [
-    # ---- Topology Zoo, PoP 级 ISP ----
     ("COGENTCO", 197, 243, "pop"),
     ("COLT", 153, 177, "pop"),
     ("ION", 125, 146, "pop"),
@@ -56,7 +36,6 @@ ISP: List[Tuple[str, int, int, str]] = [
     ("REDBESTEL", 84, 93, "pop"),
     ("VTLWAVENET2008", 88, 92, "pop"),
     ("TELCOVE", 71, 70, "pop"),
-    # ---- 光网络物理拓扑（含业务多纤）----
     ("INTEROUTE-PHYS", 110, 158, "opt"),
     ("DELTACOM-PHYS", 113, 183, "opt"),
     ("KENTUCKY-DATALINK", 754, 899, "opt"),
@@ -66,12 +45,11 @@ ISP: List[Tuple[str, int, int, str]] = [
     ("VIATEL-PHYS", 88, 92, "opt"),
 ]
 
-SRC_ZH = {"pop": "PoP 级 ISP", "opt": "光网络物理层"}
+SRC_LABEL = {"pop": "PoP-level ISP", "opt": "optical transport layer"}
 
 
-# ------------------------------------------------------------------ 造图
 def _spread(n: int, r: int) -> List[int]:
-    """在 [0, n) 上均匀取 r 个互不相同的下标。"""
+    """Draw r distinct indices from [0, n)."""
     if r <= 0:
         return []
     if r >= n:
@@ -98,7 +76,7 @@ def _add(adj: List[List[int]], seen: set, u: int, v: int) -> bool:
 
 def extra_edges(n: int, count: int, base: int,
                 adj: List[List[int]], seen: set) -> int:
-    """在 [base, base+n) 内加 count 条"等距弦"，不要求连通。返回实际条数。"""
+    """Add count equidistant chords inside [base, base+n); returns the number added."""
     cnt = 0
     d = 2
     while cnt < count and d <= (n - 1) // 2:
@@ -114,25 +92,22 @@ def extra_edges(n: int, count: int, base: int,
 def ring_graph(n: int, e: int, base: int = 0,
                adj: Optional[List[List[int]]] = None,
                seen: Optional[set] = None) -> Tuple[List[List[int]], int]:
-    """n 个点、e 条边的连通近正则图：环 + 等距弦。返回 (adj, 实际边数)。
-
-    度数差 ≤ 1，且弦沿环均匀铺开，不会挤在一段局部。
-    """
+    """Connected near-regular graph on n nodes with e edges: a ring plus chords."""
     if e < n - 1:
-        raise ValueError(f"ring_graph: {n} 点需要至少 {n - 1} 条边，给的是 {e}")
+        raise ValueError(f"ring_graph: {n} nodes need at least {n - 1} edges, got {e}")
     if adj is None:
         adj = _empty(base + n)
     if seen is None:
         seen = set()
     cnt = 0
-    for i in range(n - 1):                       # 路径
+    for i in range(n - 1):
         if _add(adj, seen, base + i, base + i + 1):
             cnt += 1
-    if cnt < e and n > 2:                        # 补一条成环
+    if cnt < e and n > 2:
         if _add(adj, seen, base + n - 1, base):
             cnt += 1
     cnt += extra_edges(n, e - cnt, base, adj, seen)
-    if cnt < e:                                  # 兜底：任意未用点对
+    if cnt < e:
         for u in range(base, base + n):
             if cnt >= e:
                 break
@@ -145,14 +120,10 @@ def ring_graph(n: int, e: int, base: int = 0,
 
 
 def hub1(N: int, M: int, K: int, seed: int = 7) -> Dict:
-    """单枢纽族：hub 度 = K，其余 N-1 个点构成随机连通残余。
-
-    残余用 G(n,m) 的随机实现而不是环格点：环格点的直径是 O(n)，会把 E 压低一个
-    量级，那是"残余选得差"而不是"族不好"。
-    """
+    """Single-hub family: one node of degree K, the other N-1 form a connected residual."""
     res_n, res_e = N - 1, M - K
     if K < 1 or K > N - 1 or res_e < res_n - 1:
-        return dict(ok=False, why=f"K={K} 不可行（res_e={res_e} < {res_n - 1}）")
+        return dict(ok=False, why=f"K={K} infeasible (res_e={res_e} < {res_n - 1})")
     sub = random_conn(res_n, int(res_e), seed=seed)
     adj = _empty(N)
     seen: set = set()
@@ -169,11 +140,11 @@ def hub1(N: int, M: int, K: int, seed: int = 7) -> Dict:
 
 
 def flower(N: int, M: int, h: int, seed: int = 7) -> Dict:
-    """花形族：h 个枢纽组成核心（近正则），其余叶子各挂一个枢纽。"""
+    """Flower family: h hubs form a near-regular core, every leaf hangs off one hub."""
     L = N - h
     e_core = M - L
     if L <= 0 or e_core < h - 1:
-        return dict(ok=False, why=f"h={h}: 核心预算不足 (e_core={e_core})")
+        return dict(ok=False, why=f"h={h}: core budget too small (e_core={e_core})")
     cap = h * (h - 1) // 2
     extra_leaf = max(0, e_core - cap)
     e_core = min(e_core, cap)
@@ -186,7 +157,7 @@ def flower(N: int, M: int, h: int, seed: int = 7) -> Dict:
                 _add(adj, seen, u, v)
     for j in range(L):
         _add(adj, seen, h + j, j % h)
-    if extra_leaf:                                # 预算有剩，只能在叶间补弦
+    if extra_leaf:
         extra_edges(L, extra_leaf, h, adj, seen)
     degs = [len(a) for a in adj]
     return dict(ok=True, adj=adj, edges=sum(degs) // 2, N=N, M=M, h=h,
@@ -195,7 +166,7 @@ def flower(N: int, M: int, h: int, seed: int = 7) -> Dict:
 
 
 def random_conn(N: int, M: int, seed: int = 0) -> Dict:
-    """随机连通图：随机递归树 + 随机补边，边数精确等于 M。"""
+    """Random connected graph: random recursive tree plus extra edges, exactly M edges."""
     rng = random.Random(seed)
     adj = _empty(N)
     seen: set = set()
@@ -212,7 +183,7 @@ def random_conn(N: int, M: int, seed: int = 0) -> Dict:
 
 
 def bimodal_cm(N: int, r: float, K: float, kmin: float, seed: int = 0) -> Optional[List[List[int]]]:
-    """标准双峰配置模型：rN 个度为 K 的枢纽 + 其余度为 kmin。用于校验闭式本身。"""
+    """Standard bimodal configuration model: rN hubs of degree K, the rest of degree kmin."""
     rng = random.Random(seed)
     nh = max(1, int(round(r * N)))
     deg = [int(K)] * nh + [int(kmin)] * (N - nh)
@@ -247,7 +218,7 @@ def bimodal_cm(N: int, r: float, K: float, kmin: float, seed: int = 0) -> Option
 
 
 def circ(N: int, M: int) -> Dict:
-    """无枢纽极限：近正则环 + 弦。"""
+    """Hub-free limit: a near-regular ring plus chords."""
     adj, cnt = ring_graph(N, M)
     degs = [len(a) for a in adj]
     return dict(ok=True, adj=adj, edges=cnt, N=N, M=M,
@@ -256,7 +227,7 @@ def circ(N: int, M: int) -> Dict:
 
 
 def star(N: int) -> Dict:
-    """纯星形（残余无边）：K = N-1。只有 M ≥ 2N-3 时才落在可行域内。"""
+    """Pure star (empty residual): K = N-1, feasible only when M >= 2N-3."""
     adj = _empty(N)
     for v in range(1, N):
         adj[0].append(v)
@@ -282,9 +253,8 @@ def _connected(adj: List[List[int]]) -> bool:
     return all(seen)
 
 
-# ------------------------------------------------------------------ 度量
 def bfs_efficiency(adj: List[List[int]]) -> float:
-    """E = 1/(N(N-1)) Σ_{s≠t} 1/d(s,t)；不连通返回 nan。"""
+    """Global efficiency E = 1/(N(N-1)) * sum 1/d(s,t); nan when disconnected."""
     N = len(adj)
     tot = 0.0
     for s in range(N):
@@ -333,11 +303,9 @@ class DSU:
 
 
 def giant_curve(adj: List[List[int]], order: Sequence[int]) -> Tuple[List[float], List[float]]:
-    """按 order 依次移除，反向并查集回放。返回按"存活节点数 n"索引的 (S, chi)。
+    """Remove nodes in the given order and replay it backwards with union-find.
 
-    S(n) = s_max/N（相对**原始**规模，即标准 P∞ 口径），
-    chi(n) = (Σs² − s_max²)/(n − s_max)。
-    注意：S 若按 s_max/n 定义，小 n 段会有 1/n 的地板，f_c 永远测不出来。
+    Returns (S, chi) indexed by the number of surviving nodes.
     """
     N = len(adj)
     dsu = DSU(N)
@@ -367,10 +335,7 @@ def giant_curve(adj: List[List[int]], order: Sequence[int]) -> Tuple[List[float]
 
 
 def _fc_from_S(Sbar: Sequence[float], N: int, floor: float) -> float:
-    """巨分量均值曲线首次跌破 floor 的位置（线性内插）。
-
-    n 从 N 递减（=f 从 0 递增），S 单调降，找第一个 S<floor 的 n。
-    """
+    """Where the mean giant-component curve first drops below floor (linear interpolation)."""
     if Sbar[N] < floor:
         return 0.0
     for n in range(N - 1, 1, -1):
@@ -384,7 +349,7 @@ def _fc_from_S(Sbar: Sequence[float], N: int, floor: float) -> float:
 
 
 def fc_random(adj: List[List[int]], seeds: int = 24, floor: Optional[float] = None) -> Dict:
-    """随机失效阈值：随机置换取平均巨分量曲线，再取跌破 1/√N 的位置。"""
+    """Random-failure threshold: average the giant-component curve over random permutations."""
     N = len(adj)
     if floor is None:
         floor = 1.0 / math.sqrt(N)
@@ -402,7 +367,7 @@ def fc_random(adj: List[List[int]], seeds: int = 24, floor: Optional[float] = No
 
 def fc_targeted(adj: List[List[int]], floor: Optional[float] = None,
                 seed: int = 7) -> Dict:
-    """定向失效阈值：按初始度降序移除，同度随机打破（否则近正则图会退化成按编号割弧）。"""
+    """Targeted threshold: remove in descending initial degree, breaking ties at random."""
     N = len(adj)
     if floor is None:
         floor = 1.0 / math.sqrt(N)
@@ -415,7 +380,7 @@ def fc_targeted(adj: List[List[int]], floor: Optional[float] = None,
 
 
 def measure(g: Dict, seeds: int = 24) -> Dict:
-    """对一张造出来的图测 E、f_c^rand、f_c^tar、R，并给出两种闭式预测。"""
+    """Measure E, f_c^rand, f_c^tar and R on one graph, next to the closed forms."""
     adj = g["adj"]
     N = len(adj)
     E = bfs_efficiency(adj)
@@ -436,28 +401,27 @@ def measure(g: Dict, seeds: int = 24) -> Dict:
 
 
 def predict_from_moments(m1: float, m2: float, r: float, K: float) -> Dict:
-    """把度的一二阶矩喂进 (7.64)-(7.66)。"""
+    """Feed the first two degree moments into (7.64)-(7.66)."""
     fr = fc_random_moments(r, K, m1, m2)
     ft, br = fc_targeted_moments(r, K, m1, m2)
-    if not (ft == ft):                     # k_min=1 时 (7.65)/(7.66) 奇点 → 结构极限 ρ_max
+    if not (ft == ft):
         ft, br = r, -1
     return dict(fc_rand=fr, fc_tar=ft, branch=br, R=0.5 * (fr + ft))
 
 
 def predict(adj: List[List[int]], r: float, K: float) -> Dict:
-    """图 → 度矩 → 闭式。"""
+    """Graph -> degree moments -> closed forms."""
     N = len(adj)
     degs = [len(a) for a in adj]
     return predict_from_moments(sum(degs) / N,
                                 sum(d * d for d in degs) / N, r, K)
 
 
-# ------------------------------------------------------------------ 设计
 HS = (2, 3, 4, 6, 8, 12, 16, 24, 32)
 
 
 def designs_for(N: int, M: int, gseeds: int = 3) -> List[Tuple[str, Dict]]:
-    """给一张 ISP 的 (N, M)，列出要比较的候选设计（严格同预算）。"""
+    """List the candidate designs for one ISP at its exact (N, M)."""
     kbar = 2.0 * M / N
     out: List[Tuple[str, Dict]] = []
     Kcap = int(min(N - 1, M - (N - 2))) if M >= N - 1 else 0
@@ -502,7 +466,7 @@ def family_of(tag: str) -> str:
 
 def evaluate(name: str, N: int, M: int, seeds: int = 16,
              gseeds: int = 3) -> List[Dict]:
-    """同一设计的多张实现取平均（残余与补边是随机的，单张会有 ±0.03 抖动）。"""
+    """Average several realisations of the same design; one sample jitters by about 0.03."""
     bucket: Dict[str, List[Dict]] = {}
     for tag, g in designs_for(N, M, gseeds):
         m = measure(g, seeds)
@@ -552,9 +516,8 @@ def profile(N: int, M: int) -> Dict:
                 R_hi=w.get("R_hi"), R_lo=w.get("R_lo"), dR=w.get("dR"))
 
 
-# ------------------------------------------------------------------ 打印
 def table(rows: Sequence[Dict]) -> List[str]:
-    L = [f"{'ISP':<18}{'<k>':>5}{'设计':<22}{'E':>7}{'fcr':>7}{'fct':>7}"
+    L = [f"{'ISP':<18}{'<k>':>5}{'design':<22}{'E':>7}{'fcr':>7}{'fct':>7}"
          f"{'R':>7}{'auc_r':>7}{'auc_t':>7}"]
     cur = None
     for r in rows:
@@ -568,9 +531,9 @@ def table(rows: Sequence[Dict]) -> List[str]:
 
 
 def summary(rows: Sequence[Dict]) -> List[str]:
-    """每个 ISP：单枢纽(cap) vs 最优花形 vs 随机图。"""
-    L = [f"{'ISP':<18}{'<k>':>5} | {'单枢纽':^22} | {'最优花形':^26} | "
-         f"{'随机图':^16} | 增益"]
+    """Per ISP: single hub (budget-capped), best flower, random graph."""
+    L = [f"{'ISP':<18}{'<k>':>5} | {'single hub':^22} | {'best flower':^26} | "
+         f"{'random':^16} | gain"]
     L.append(f"{'':<18}{'':>5} | {'E':>7}{'R':>7}{'fct':>7} | "
              f"{'h*':>3}{'E':>7}{'R':>7}{'fct':>7} | {'E':>7}{'R':>7} | "
              f"{'ΔE':>6}{'ΔR':>7}")
@@ -594,7 +557,7 @@ def summary(rows: Sequence[Dict]) -> List[str]:
 
 
 def h_star(N: int, M: int, seeds: int = 12) -> List[Dict]:
-    """花形族 h 扫描（单张实现，用于看趋势）。"""
+    """Sweep h over the flower family on a single realisation."""
     out = []
     Kcap = int(min(N - 1, M - (N - 2)))
     for h in (1,) + HS:
@@ -608,36 +571,36 @@ def h_star(N: int, M: int, seeds: int = 12) -> List[Dict]:
 
 
 def err_stats(rows: Sequence[Dict]) -> List[str]:
-    """闭式 (7.64)-(7.66) 对实测的偏差。"""
+    """Deviation of the closed forms (7.64)-(7.66) from the measurements."""
     def med(v):
         v = sorted(v)
         return v[len(v) // 2] if v else float("nan")
 
-    L = ["闭式 (7.64)-(7.66) vs 实测（同一张图，把实测度矩喂进公式）："]
-    for fam, label in (("hub1", "单枢纽"), ("flower", "花形")):
+    L = ["closed forms (7.64)-(7.66) vs measurement on the same graph:"]
+    for fam, label in (("hub1", "single hub"), ("flower", "flower")):
         rs = [r for r in rows if family_of(r["design"]) == fam
               and r["pr_R"] == r["pr_R"] and r["pr_R"] <= 1.0]
         if not rs:
             continue
         L.append(f"  {label:<5} n={len(rs):3d}  "
-                 f"Δfcr 中位 {med([r['pr_rand'] - r['fc_rand'] for r in rs]):+.3f}  "
-                 f"Δfct 中位 {med([r['pr_tar'] - r['fc_tar'] for r in rs]):+.3f}  "
-                 f"ΔR 中位 {med([r['pr_R'] - r['R'] for r in rs]):+.3f}")
+                 f"median d_fcr {med([r['pr_rand'] - r['fc_rand'] for r in rs]):+.3f}  "
+                 f"median d_fct {med([r['pr_tar'] - r['fc_tar'] for r in rs]):+.3f}  "
+                 f"median dR {med([r['pr_R'] - r['R'] for r in rs]):+.3f}")
     rs = [r for r in rows if r["design"] == "rand"]
     if rs:
-        L.append(f"  随机图   n={len(rs):3d}  "
-                 f"κ判据 1−1/(κ−1) vs 实测："
-                 f"中位 {med([r['fc_mf'] - r['fc_rand'] for r in rs]):+.3f}")
+        L.append(f"  random   n={len(rs):3d}  "
+                 f"kappa criterion 1-1/(kappa-1) vs measured: "
+                 f"median {med([r['fc_mf'] - r['fc_rand'] for r in rs]):+.3f}")
     return L
 
 
 def aggregate(rows: Sequence[Dict]) -> List[str]:
-    """按密度分组统计族间差异，回答"c 拨盘在 ISP 上到底还剩多少空间"。"""
+    """Compare the families by density, i.e. how much room the c knob still has."""
     L = []
     lo = [r for r in rows if r["kbar"] < 3.0]
     hi = [r for r in rows if r["kbar"] >= 3.0]
-    L.append(f"密度分组：<k><3 的 ISP 有 {len(set(r['isp'] for r in lo))} 张，"
-             f">=3 的有 {len(set(r['isp'] for r in hi))} 张")
+    L.append(f"density split: {len(set(r['isp'] for r in lo))} ISPs with <k> < 3, "
+             f"{len(set(r['isp'] for r in hi))} with <k> >= 3")
     for grp, label in ((lo, "<k><3"), (hi, "<k>>=3")):
         if not grp:
             continue
@@ -655,17 +618,17 @@ def aggregate(rows: Sequence[Dict]) -> List[str]:
             dR.append(bf["R"] - hub["R"])
             e5.append(rd["E"] / hub["E"] - 1 if rd and hub["E"] else float("nan"))
             r5.append(rd["R"] - hub["R"] if rd else float("nan"))
-        L.append(f"  {label:<7} 花形 h=2 vs 单枢纽： ΔE {_mean(dE) * 100:+5.0f}%   "
-                 f"ΔR {_mean(dR):+.3f}   |  随机图 vs 单枢纽： "
+        L.append(f"  {label:<10} flower h=2 vs single hub: dE {_mean(dE) * 100:+5.0f}%   "
+                 f"dR {_mean(dR):+.3f}   |  random vs single hub: "
                  f"ΔE {_mean(e5) * 100:+5.0f}%   ΔR {_mean(r5):+.3f}")
     return L
 
 
 def validate() -> List[str]:
-    """闭式本身准不准：在标准双峰配置模型上对答案。"""
-    L = ["闭式校验（标准双峰配置模型，随机/定向各一次蒙特卡洛）："]
-    L.append(f"  {'配置':<28}{'fcr测':>8}{'fcr式':>8}{'κ判据':>8}"
-             f"{'fct测':>8}{'fct式':>8}")
+    """Check the closed forms against the standard bimodal configuration model."""
+    L = ["closed-form check on the bimodal configuration model (one Monte Carlo each):"]
+    L.append(f"  {'setting':<28}{'fcr num':>8}{'fcr cf':>8}{'kappa':>8}"
+             f"{'fct num':>8}{'fct cf':>8}")
     for N, r, K, kmin in ((2000, 0.10, 20, 2), (2000, 0.50, 10, 2),
                           (1000, 0.02, 40, 2)):
         adj = bimodal_cm(N, r, K, kmin, seed=1)
@@ -678,13 +641,12 @@ def validate() -> List[str]:
                  f"{m['fc_mf']:8.3f}{m['fc_tar']:8.3f}{pr['fc_tar']:8.3f}")
     st = star(200)
     m = measure(st, seeds=40)
-    L.append(f"  {'星形 N=200':<28}{m['fc_rand']:8.3f}{'1.000':>8}"
+    L.append(f"  {'star N=200':<28}{m['fc_rand']:8.3f}{'1.000':>8}"
              f"{m['fc_mf']:8.3f}{m['fc_tar']:8.3f}{'0.005':>8}")
-    L.append("  → 闭式在两处都偏高：r 很小时偏高最多；κ 判据在 r 不小的时候更准")
+    L.append("  -> the closed forms overestimate; the kappa criterion is better when r is not small")
     return L
 
 
-# ------------------------------------------------------------------ 自检
 def selftest() -> int:
     fails = 0
 
@@ -694,50 +656,45 @@ def selftest() -> int:
             fails += 1
             print(f"  FAIL {msg}  {extra}")
 
-    # 1) 造图：边数精确、连通
     for n, e in ((10, 9), (10, 12), (50, 60), (196, 195), (196, 300)):
         adj, c = ring_graph(n, e)
-        chk(f"ring({n},{e}) 边数", c == e, str(c))
-        chk(f"ring({n},{e}) 连通", _connected(adj))
+        chk(f"ring({n},{e}) edge count", c == e, str(c))
+        chk(f"ring({n},{e}) connected", _connected(adj))
     for N, M, K in ((197, 243, 48), (153, 177, 26), (100, 200, 46), (100, 200, 99)):
         g = hub1(N, M, K)
-        chk(f"hub1({N},{M},{K}) 边数", g["ok"] and g["edges"] == M, str(g.get("edges")))
-        chk(f"hub1({N},{M},{K}) hub 度", g["hub_deg"] == K, str(g.get("hub_deg")))
-        chk(f"hub1({N},{M},{K}) 连通", g["connected"])
+        chk(f"hub1({N},{M},{K}) edge count", g["ok"] and g["edges"] == M, str(g.get("edges")))
+        chk(f"hub1({N},{M},{K}) hub degree", g["hub_deg"] == K, str(g.get("hub_deg")))
+        chk(f"hub1({N},{M},{K}) connected", g["connected"])
     for N, M, h in ((197, 243, 8), (153, 177, 8), (754, 899, 16)):
         g = flower(N, M, h)
         if not g["ok"]:
             chk(f"flower({N},{M},{h})", False, g["why"])
             continue
-        chk(f"flower({N},{M},{h}) 边数", g["edges"] == M, str(g["edges"]))
-        chk(f"flower({N},{M},{h}) 连通", g["connected"])
+        chk(f"flower({N},{M},{h}) edge count", g["edges"] == M, str(g["edges"]))
+        chk(f"flower({N},{M},{h}) connected", g["connected"])
 
-    # 2) E 的解析锚点：星形 = (N+2)/2N
     N = 100
     st = star(N)
-    chk("星形 E = (N+2)/2N", abs(bfs_efficiency(st["adj"]) - (N + 2) / (2 * N)) < 1e-12,
+    chk("star: E = (N+2)/2N", abs(bfs_efficiency(st["adj"]) - (N + 2) / (2 * N)) < 1e-12,
         str(bfs_efficiency(st["adj"])))
 
-    # 3) 渗流测量器在已知答案上校准
     st200 = star(200)
     ms = measure(st200, seeds=40)
-    chk("星形 f_c^rand 高（随机攻击几乎打不烂）", ms["fc_rand"] > 0.65,
+    chk("star: high f_c^rand", ms["fc_rand"] > 0.65,
         f"{ms['fc_rand']:.3f}")
-    chk("星形 f_c^tar ≈ 1/N（一枪毙命）", ms["fc_tar"] < 0.03, f"{ms['fc_tar']:.3f}")
-    chk("星形 R 落在 [0.35,0.55]", 0.35 < ms["R"] < 0.55, f"{ms['R']:.3f}")
+    chk("star: f_c^tar around 1/N", ms["fc_tar"] < 0.03, f"{ms['fc_tar']:.3f}")
+    chk("star: R in [0.35, 0.55]", 0.35 < ms["R"] < 0.55, f"{ms['R']:.3f}")
 
     er = random_conn(200, 400, seed=3)
     me = measure(er, seeds=40)
-    chk("随机图 <k>=4 的 f_c^rand ≈ 1−1/<k>=0.75",
+    chk("random graph, <k>=4: f_c^rand around 0.75",
         0.62 < me["fc_rand"] < 0.84, f"{me['fc_rand']:.3f}")
-    chk("随机图上定向比随机有效得多", me["fc_tar"] < me["fc_rand"] - 0.15,
+    chk("targeted attack much stronger than random", me["fc_tar"] < me["fc_rand"] - 0.15,
         f"{me['fc_tar']:.3f} vs {me['fc_rand']:.3f}")
 
-    # 4) 星形闭式：k_min=1 是奇点，结构极限 R_t→ρ_max，故 R→0.5
     pr = predict(st200["adj"], 1.0 / 200, 199)
-    chk("星形闭式 R ≈ 0.5（奇点取结构极限）", abs(pr["R"] - 0.5) < 0.02, f"{pr['R']:.3f}")
+    chk("star: closed-form R around 0.5", abs(pr["R"] - 0.5) < 0.02, f"{pr['R']:.3f}")
 
-    # 5) 同一 (N,M) 下各族都能造出来，且 E 落在 (0,1]
     for tag, g in designs_for(197, 243, gseeds=1):
         E = bfs_efficiency(g["adj"])
         chk(f"197/243 {tag} E∈(0,1]", 0 < E <= 1.0, str(E))
@@ -746,15 +703,14 @@ def selftest() -> int:
     return fails
 
 
-# ------------------------------------------------------------------ CLI
 def main() -> None:
-    ap = argparse.ArgumentParser(description="在 ISP 规模/预算上造图并对比")
+    ap = argparse.ArgumentParser(description="build and compare designs at the real ISP size and budget")
     ap.add_argument("--selftest", action="store_true")
-    ap.add_argument("--table", action="store_true", help="逐设计明细")
-    ap.add_argument("--summary", action="store_true", help="单枢纽 vs 最优花形 vs 随机")
-    ap.add_argument("--profile", action="store_true", help="几何画像")
-    ap.add_argument("--hsweep", action="store_true", help="h 扫描")
-    ap.add_argument("--validate", action="store_true", help="闭式自身校验")
+    ap.add_argument("--table", action="store_true", help="per-design detail")
+    ap.add_argument("--summary", action="store_true", help="single hub vs best flower vs random")
+    ap.add_argument("--profile", action="store_true", help="geometric profile")
+    ap.add_argument("--hsweep", action="store_true", help="sweep h")
+    ap.add_argument("--validate", action="store_true", help="check the closed forms")
     ap.add_argument("--isp", default=None)
     ap.add_argument("--seeds", type=int, default=16)
     ap.add_argument("--gseeds", type=int, default=3)
@@ -807,7 +763,7 @@ def main() -> None:
 
 def profile_lines(rows: Sequence[Dict]) -> List[str]:
     L = [f"{'ISP':<18}{'N':>5}{'M':>5}{'<k>':>6}{'Kcap':>5}{'c_hi':>6}"
-         f"{'阶段':>6}{'E_dir':>7}{'R_lo':>7}{'R_hi':>7}{'ΔR':>7}"]
+         f"{'stage':>6}{'E_dir':>7}{'R_lo':>7}{'R_hi':>7}{'dR':>7}"]
     for name in dict.fromkeys(r["isp"] for r in rows):
         r = next(x for x in rows if x["isp"] == name)
         p = profile(r["N"], r["M"])

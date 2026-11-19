@@ -96,12 +96,7 @@ def ei_dismantle(G: nx.Graph, stop_condition: int, sigma: int = 2,
         
         if lcc <= stop_condition:
             output_nodes.append(best_u)
-        # Note: C++ code continues even after LCC > threshold,
-        # but stops printing. We follow the same logic.
     
-    # Removed nodes = all nodes not in output_nodes
-    # (In C++, output_nodes are the printed nodes, but the kept set is larger.
-    #  For simplicity, we treat output_nodes as the "safe" kept set.)
     removed = [v for v in range(n) if v not in output_nodes]
     # Sort removed by degree descending for dismantling order
     removed.sort(key=lambda v: G.degree(v), reverse=True)

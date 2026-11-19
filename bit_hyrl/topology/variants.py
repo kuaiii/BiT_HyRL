@@ -1,21 +1,6 @@
-"""Mechanism-attribution graph variants (NOT used by any production path).
+"""Graph variants used for mechanism attribution.
 
-These isolate the two separable design factors of the BiT construction:
-
-* **(i) the near-regular degree sequence** — :func:`bit_degree_random_realize`
-  uses the *same* ``plan_degree_sequence`` and *same* seed as the full builder but
-  stops at the **Havel–Hakimi realisation** (``realize="hh"``, no decorrelation
-  pass); its **only** difference from :func:`build_bimodal_graph(plan, seed)`
-  (the full BiT graph) is the degree-preserving 2-switch **decorrelation** step.
-  This is the controlled ablation for "decorrelation".
-* **(ii) the original graph's degree distribution** — :func:`configuration_model_like`
-  keeps the **exact degree sequence of the input graph** but randomises the edge
-  arrangement with many degree-preserving 2-switches (configuration-model-like),
-  stripping the original assortativity / clustering / community structure.
-
-All variants preserve ``N`` and ``M`` and the exact degree sequence, keep the graph
-simple, and are made connected by **degree-preserving** 2-switches (the builder's
-:func:`repair_connectivity`) — never by dropping nodes or adding edges.
+Not used by any production path.
 """
 
 from __future__ import annotations
@@ -46,15 +31,8 @@ def _repair_degree_preserving(graph: nx.Graph, seed: int) -> nx.Graph:
 
 
 def configuration_model_like(G: nx.Graph, seed: int = 0) -> nx.Graph:
-    """Same **degree sequence** as ``G``, topology randomised (configuration-model-like).
-
-    Many degree-preserving 2-switches (``nx.double_edge_swap``) scramble the edge
-    arrangement while keeping every node's degree, ``N`` and ``M`` exactly; the graph
-    is then re-connected with degree-preserving switches.  This removes the original
-    graph's assortativity / clustering / community structure while isolating its
-    **degree distribution** as the only preserved structural feature.
-    """
-    base = nx.Graph(G)  # simple graph (drops self-loops / parallel edges)
+    """Same **degree sequence** as ``G``, topology randomised (configuration-model-like)."""
+    base = nx.Graph(G)
     n = base.number_of_nodes()
     m = base.number_of_edges()
     if m < 2 or n < 4:
@@ -72,17 +50,7 @@ def configuration_model_like(G: nx.Graph, seed: int = 0) -> nx.Graph:
 
 
 def bit_degree_random_realize(G: nx.Graph, c: float = 1.6, h: int = 1, seed: int = 0) -> nx.Graph:
-    """BiT's near-regular degree sequence with a **randomised** topology.
-
-    Realises the same ``plan_degree_sequence(n, m, c, h)`` as the full builder, then
-    scrambles the edge arrangement with many degree-preserving 2-switches
-    (``nx.double_edge_swap``), keeping ``N``, ``M`` and the exact near-regular degree
-    sequence.  This is the *degree-distribution-only* control: like ``configuration_
-    model_like`` but on the **BiT** degree sequence, so ``full − this`` measures what
-    BiT's own decorrelation pass adds *beyond generic randomisation* (≈0 if the two
-    randomisations sample the same ensemble), and ``this − B`` isolates the degree
-    distribution.
-    """
+    """BiT's near-regular degree sequence with a **randomised** topology."""
     base = nx.Graph(G)
     n = base.number_of_nodes()
     m = base.number_of_edges()
@@ -101,15 +69,7 @@ def bit_degree_random_realize(G: nx.Graph, c: float = 1.6, h: int = 1, seed: int
 
 
 def bit_degree_hh_realize(G: nx.Graph, c: float = 1.6, h: int = 1, seed: int = 0) -> nx.Graph:
-    """BiT's near-regular degree sequence realised by Havel–Hakimi, **no decorrelation**.
-
-    This is exactly ``build_bimodal_graph(plan, seed)`` (full BiT) with the
-    decorrelation pass switched off (``realize="hh"``) — same plan, same seed, the
-    only difference is the 10·m 2-switch decorrelation.  It yields an *ordered*,
-    chain-like graph (near-regular HH does not randomise), so it is a diagnostic for
-    "what happens if you keep the degree sequence but skip randomisation", not a good
-    reconstruction.  Preserves ``N``, ``M``, the degree sequence and connectivity.
-    """
+    """BiT's near-regular degree sequence realised by Havel–Hakimi, **no decorrelation**."""
     base = nx.Graph(G)
     plan = plan_degree_sequence(base.number_of_nodes(), base.number_of_edges(), c=c, h=h)
     result = build_bimodal_graph(plan, seed, realize="hh", enforce_connected=True)
@@ -117,11 +77,7 @@ def bit_degree_hh_realize(G: nx.Graph, c: float = 1.6, h: int = 1, seed: int = 0
 
 
 def regular_reference_like(G: nx.Graph, seed: int = 0) -> nx.Graph:
-    """Exact ``k̄``-regular circulant (ring) reference — the near-regular upper bound.
-
-    ``k̄`` is ``round(2M/N)`` (even).  Not degree/M-matched to ``G``; it is a
-    theoretical *reference*, not a reconstruction of it.
-    """
+    """Exact ``k̄``-regular circulant (ring) reference — the near-regular upper bound."""
     base = nx.Graph(G)
     n = base.number_of_nodes()
     if n < 4:

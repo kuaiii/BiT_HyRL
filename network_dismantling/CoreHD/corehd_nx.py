@@ -39,13 +39,8 @@ def corehd_dismantle(G: nx.Graph, stop_condition: int, seed: int = None) -> List
     # Save original adjacency for later use (since we will mutate G)
     original_neighbors = {v: set(G.neighbors(v)) for v in G.nodes()}
     
-    # occupied[v] = True  -> v is still in the graph (not removed)
-    # occupied[v] = False -> v has been removed
     occupied = {v: True for v in G.nodes()}
     
-    # ------------------------------------------------------------------
-    # Phase B: Fix0 - dismantle the 2-core
-    # ------------------------------------------------------------------
     targets = []
     H = G.copy()  # Working copy that we mutate
     
@@ -68,15 +63,7 @@ def corehd_dismantle(G: nx.Graph, stop_condition: int, seed: int = None) -> List
         H.remove_node(v)
         targets.append(v)
         
-        # Simplify: recursively remove degree<=1 nodes from core
-        # (In C++, Simplify is called after each removal and cascades.
-        #  We let the next iteration recompute the 2-core, which is equivalent
-        #  but slightly slower. For correctness it's the same.)
     
-    # ------------------------------------------------------------------
-    # Phase C: ComponentRefinement
-    # ------------------------------------------------------------------
-    # H already contains only occupied nodes after Fix0
     
     # C1: Break giant tree components
     while True:
@@ -84,8 +71,6 @@ def corehd_dismantle(G: nx.Graph, stop_condition: int, seed: int = None) -> List
         giant_found = False
         for comp in components:
             if len(comp) > stop_condition:
-                # This is a tree component (since 2-core is empty)
-                # Find vertex whose deletion minimizes max subtree size
                 subtree = H.subgraph(comp).copy()
                 cvtx = _find_best_tree_breaker(subtree)
                 # Break giant tree component
@@ -98,9 +83,6 @@ def corehd_dismantle(G: nx.Graph, stop_condition: int, seed: int = None) -> List
         if not giant_found:
             break
     
-    # C2: Greedy add-back
-    # Collect deleted nodes that are adjacent to small components
-    # and sort by merged component size (ascending)
     comp_index, comp_size = _label_components(H)
     
     while True:
@@ -191,18 +173,12 @@ def _find_best_tree_breaker(T: nx.Graph) -> int:
                 if degrees[u] == 1:
                     leaves.append(u)
     
-    # Now compute b_size (branch size) bottom-up
-    # For each leaf-stripped node, track the sizes of subtrees below it
     b_size = {}
     subtree_sums = {}
     
     for v in order:
         # v's active neighbors are those not yet processed (still in tree)
         active_nbrs = [u for u in T.neighbors(v) if u not in removed or u in b_size]
-        # Actually, we need to be more careful here.
-        # In the C++ code, leaf stripping marks nodes inactive and computes
-        # b_size as the sum of branch sizes of removed children + 1.
-        # Let's use a simpler approach: try every node and compute max subtree.
         pass
     
     # Simpler brute-force for small trees (typical after 2-core removal):

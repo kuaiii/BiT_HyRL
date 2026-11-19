@@ -1,23 +1,4 @@
-"""Fill the missing cells of the 2x2 ablation: topology {original, BiT} x placement {MADQN, PPO}.
-
-The main matrix already has ``MADQN-sim`` (original graph + MADQN placement) and
-``BiT-HyRL`` (BiT + PPO), but **not** original + PPO.  Without that cell we cannot
-separate "the reconstruction helped" from "the learned placement helped", and reviewers
-will ask for exactly that contrast.
-
-Three variants are provided, all evaluated with the identical protocol as the main
-matrix (same attacks, seeds, cascade mode, metric definitions):
-
-  original     -- the un-reconstructed graph  (the missing 2x2 cell)
-  degree_only  -- original degree sequence, topology randomised (isolates "keeping the
-                  degree distribution but removing assortativity")
-  bit_c10      -- BiT at c = 1.0, i.e. the near-regular limit with no hub
-                  (isolates what the hub itself contributes)
-
-Usage:
-    python scripts/eval_ablation_arms.py --variant original --workers 6
-    python scripts/eval_ablation_arms.py --variant all --workers 6
-"""
+"""Fill the missing cells of the 2x2 topology x placement ablation."""
 
 from __future__ import annotations
 
@@ -46,9 +27,6 @@ from bit_hyrl.evaluation.runner import run_evaluation  # noqa: E402
 from bit_hyrl.io.graph_io import load_graph_spec  # noqa: E402
 from bit_hyrl.rl.transfer import load_policy  # noqa: E402
 
-#: one single results root.  The paper's Table 10 reads the scalar export
-#: ``ablation_all_scalar.csv`` in this directory, which carries the curve columns
-#: dropped; re-running this script rewrites the raw ``*.csv`` cells beside it.
 OUT_DIR = REPO_ROOT / "results" / "baselines" / "ablation"
 LABELS = {"original": "BiT-norecon", "degree_only": "BiT-degOnly", "bit_c10": "BiT-c1.0"}
 
@@ -98,7 +76,7 @@ def _run_one(task: tuple[dict[str, Any], str, tuple[str, ...], tuple[int, ...], 
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="补齐 2x2 消融缺失的单元")
+    parser = argparse.ArgumentParser(description="fill the missing cells of the 2x2 ablation")
     parser.add_argument("--variant", default="original",
                         choices=("original", "degree_only", "bit_c10", "all"))
     parser.add_argument("--dataset", default="all")
@@ -134,7 +112,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         for task in tasks:
             collected.extend(_run_one(task)["rows"])
 
-    # merge all per-cell files written so far (survives partial runs)
     import pandas as pd
     cells = sorted(OUT_DIR.glob("*.csv"))
     if cells:

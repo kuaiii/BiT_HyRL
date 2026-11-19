@@ -26,15 +26,7 @@ def load_checkpoint(path: str | Path) -> dict:
 
 
 def load_policy(path: str | Path, device: str = "cpu") -> PPOPolicy:
-    """Rebuild a :class:`PPOPolicy` from a checkpoint path.
-
-    Args:
-        path: Checkpoint file written by the trainer.
-        device: Torch device.
-
-    Returns:
-        An eval-mode :class:`PPOPolicy` ready for :func:`apply`.
-    """
+    """Rebuild a :class:`PPOPolicy` from a checkpoint path."""
     checkpoint = load_checkpoint(path)
     cfg = TrainConfig.from_dict(checkpoint["cfg"])
     decode = {**DEFAULT_DECODE, **checkpoint.get("decode", {})}

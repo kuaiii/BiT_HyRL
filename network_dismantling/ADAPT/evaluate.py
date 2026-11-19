@@ -204,8 +204,6 @@ def evaluate_arch(args):
         times = all_times[method_name]
         print(f"{method_name:<15} {np.mean(aucs):>10.4f} {np.mean(taus) if taus else -1:>8.1f} {np.mean(overlaps):>10.4f} {np.mean(times):>12.2f}")
 
-        # Average curves across graphs
-        # Align by q (fraction removed) and average sigma
         all_qs = []
         all_sigs = []
         for curve in all_curves[method_name]:

@@ -1,10 +1,9 @@
-"""Ported baselines: 5 topology reconstruction methods + 2 placement proxies.
+"""Baselines: five topology reconstruction methods and two placement proxies.
 
 Topology baselines share ``construct(G, *, seed=0, **params) -> nx.Graph`` (same N,
 connected); placement proxies share ``select(graph, budget, seed=0) -> list[int]``.
-The two placement proxies are honestly marked ``-sim`` (they are proxies, not the
-original methods).  The logic is copied from the old ``network_construction`` /
-``scripts`` tree — the package never imports it.
+The two placement entries carry the ``-sim`` suffix because they approximate the
+original methods rather than reproducing them.
 """
 
 from __future__ import annotations

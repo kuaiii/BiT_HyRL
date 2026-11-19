@@ -15,7 +15,7 @@ METHOD_REGISTRY: Dict[str, Callable] = {}
 
 
 def list_methods() -> List[str]:
-    """返回所有已注册的拆解方法名称。"""
+    """Names of the registered dismantling methods."""
     return list(METHOD_REGISTRY.keys())
 
 
@@ -102,20 +102,8 @@ def dismantle(G: nx.Graph, method: str, stop_condition: Optional[int] = None, **
     return seq_orig
 
 
-# ---------------------------------------------------------------------------
-# k-hop rolling-window dismantling (fair comparison: all methods see local)
-# ---------------------------------------------------------------------------
 def _bfs_khop_nodes(G: nx.Graph, source: int, k_hop: int) -> set:
-    """
-    通过BFS迭代获取source节点的k-hop范围内的所有邻居节点。
-    
-    参数:
-      G: NetworkX图。
-      source: 起始节点。
-      k_hop: BFS深度(跳数)。
-    
-    返回: k-hop范围内所有节点的集合(包含source本身)。
-    """
+    """Nodes within k hops of source, including source itself."""
     visited = {source}
     frontier = {source}
     for _ in range(k_hop):
@@ -139,78 +127,54 @@ def dismantle_khop_rolling(
     initial_center: Optional[int] = None,
     **method_kwargs,
 ) -> List[int]:
+    """Dismantle within a k-hop window that grows as nodes are removed.
+
+    The graph itself is never modified.  At each step the method runs on the
+    subgraph induced by the visible nodes, takes the first node of the returned
+    sequence that has not been removed yet, then adds that node's k-hop
+    neighbourhood to the window.  Once the window covers the whole graph the
+    remaining sequence is produced in one global pass.
     """
-    k-hop 滚动窗口拆解方法 (视野逐步扩展版)。
-    
-    核心逻辑:
-      1. G_working 始终保持完整，不物理删除节点。
-      2. 维护 visible_nodes 集合表示当前算法"视野范围"。
-      3. 每次移除节点 v 后，将 v 的 k-hop 邻居加入 visible_nodes 扩展视野。
-      4. 在 visible_nodes 构成的子图上运行 dismantle，取 seq 中第一个不在 removed 中的节点。
-      5. 当 visible_nodes 覆盖全图时，直接在 G_working 上运行一次全局 dismantle 补齐剩余序列。
-    
-    参数:
-      G: 原始输入图(不修改)。
-      method: 拆解方法名称。
-      k_hop: 观察半径(跳数)。
-      seed: 随机种子。
-      initial_center: 初始中心节点(从外部传入确保各方法可比)。
-      **method_kwargs: 额外参数透传给 dismantle(如 ADAPT 的 model_path/device)。
-    
-    返回: 完整的拆解序列(原始节点ID)。
-    """
-    # 兼容 ADAPT 的 k_hop 参数命名冲突：dismantle_khop_rolling 的 k_hop 是视野半径，
-    # ADAPT 模型的 k_hop 通过 adapt_k 传入，在此处映射回 k_hop 传给 dismantle。
     if "adapt_k" in method_kwargs:
         method_kwargs = dict(method_kwargs)
         method_kwargs["k_hop"] = method_kwargs.pop("adapt_k")
 
     rng = np.random.default_rng(seed)
-    G_working = G.copy()   # 保持完整，不物理删除节点
-    removed = []           # 记录已移除节点顺序
-    visible_nodes = set()  # 当前视野范围
+    G_working = G.copy()
+    removed = []
+    visible_nodes = set()
 
-    # 初始化中心节点
     if initial_center is None or initial_center not in G_working:
         initial_center = int(rng.choice(list(G_working.nodes())))
 
-    # 初始化视野：将 initial_center 的 k-hop 邻居加入 visible_nodes
     visible_nodes.update(_bfs_khop_nodes(G_working, initial_center, k_hop))
 
-    # 迭代拆解过程
     while len(removed) < G.number_of_nodes():
-        # 检查视野是否已覆盖全图
         if len(visible_nodes) >= G.number_of_nodes():
-            # 视野全局化：直接在完整图上运行 dismantle 补齐剩余序列
             try:
                 seq = dismantle(G_working, method=method, **method_kwargs)
             except Exception as e:
                 logger.warning(
-                    f"dismantle_khop_rolling: global dismantle failed for method '{method}': {e}"
+                    f"dismantle_khop_rolling: global dismantle failed for '{method}': {e}"
                 )
                 seq = sorted(G_working.nodes(), key=lambda v: G_working.degree(v), reverse=True)
-            # 按顺序追加所有不在 removed 中的节点
             for node in seq:
                 if node not in removed:
                     removed.append(node)
             break
 
-        # 在视野范围内构建子图
         subG = G_working.subgraph(visible_nodes).copy()
         if subG.number_of_nodes() == 0:
             break
 
-        # 在局部子图上运行 dismantle
         try:
             seq = dismantle(subG, method=method, **method_kwargs)
         except Exception as e:
             logger.warning(
                 f"dismantle_khop_rolling: method '{method}' failed on visible subgraph: {e}"
             )
-            # Fallback: 按度降序
             seq = sorted(subG.nodes(), key=lambda v: subG.degree(v), reverse=True)
 
-        # 找到 seq 中第一个不在 removed 中的节点(防御性：seq可能含已移除节点)
         v = None
         for node in seq:
             if node not in removed:
@@ -218,16 +182,13 @@ def dismantle_khop_rolling(
                 break
 
         if v is None:
-            # seq 中所有节点都已被移除，跳出
             break
 
         removed.append(v)
 
-        # 扩展视野：将 v 的 k-hop 邻居加入 visible_nodes
         if v in G_working:
             visible_nodes.update(_bfs_khop_nodes(G_working, v, k_hop))
 
-    # 防御性：确保返回完整序列(补齐任何遗漏的节点)
     remaining = [v for v in G.nodes() if v not in removed]
     if remaining:
         remaining.sort(key=lambda v: G.degree(v), reverse=True)
@@ -236,9 +197,6 @@ def dismantle_khop_rolling(
     return removed
 
 
-# ---------------------------------------------------------------------------
-# Heuristics (static scores)
-# ---------------------------------------------------------------------------
 from network_dismantling.heuristics.sorters_nx import (
     degree_scores,
     pagerank_scores,
@@ -279,9 +237,6 @@ def _random_dismantler(G: nx.Graph, seed: int = None, **kwargs) -> List[int]:
     return random_scores(G, seed=seed)
 
 
-# ---------------------------------------------------------------------------
-# Adaptive attacks (recompute priorities after each removal)
-# ---------------------------------------------------------------------------
 def _adaptive_sequence_by_score(G: nx.Graph, score_fn: Callable[[nx.Graph], Dict[int, float]]) -> List[int]:
     H = G.copy()
     sequence = []
@@ -345,9 +300,6 @@ def _lookahead_gcc_dismantler(G: nx.Graph, top_k: int = 8, **kwargs) -> List[int
     return sequence
 
 
-# ---------------------------------------------------------------------------
-# Brute Force (for small networks)
-# ---------------------------------------------------------------------------
 @register_method("brute_force")
 def _brute_force_dismantler(G: nx.Graph, max_k: int = None, **kwargs) -> List[int]:
     """
@@ -397,9 +349,6 @@ def _brute_force_dismantler(G: nx.Graph, max_k: int = None, **kwargs) -> List[in
     return best_sequence + remaining
 
 
-# ---------------------------------------------------------------------------
-# Multiscale Entanglement (networkx version)
-# ---------------------------------------------------------------------------
 from network_dismantling.multiscale_entanglement.original_entanglement_functions import (
     entanglement_small as _entanglement_small,
     entanglement_mid as _entanglement_mid,
@@ -440,9 +389,6 @@ def _entanglement_large_dismantler(G: nx.Graph, **kwargs) -> List[int]:
     return nodes
 
 
-# ---------------------------------------------------------------------------
-# CI (Collective Influence) - C executable wrapper
-# ---------------------------------------------------------------------------
 from network_dismantling.CI.ci_wrapper_nx import ci_dismantle_nx
 
 
@@ -461,9 +407,6 @@ def _ci_l3_dismantler(G: nx.Graph, **kwargs) -> List[int]:
     return ci_dismantle_nx(G, l=3, stop_condition=1)
 
 
-# ---------------------------------------------------------------------------
-# CoreHD (Python reimplementation)
-# ---------------------------------------------------------------------------
 from network_dismantling.CoreHD.corehd_nx import corehd_dismantle
 
 
@@ -474,9 +417,6 @@ def _corehd_dismantler(G: nx.Graph, seed: int = None, **kwargs) -> List[int]:
     return _fill_remaining(G, seq)
 
 
-# ---------------------------------------------------------------------------
-# GND / EGND (Python reimplementation)
-# ---------------------------------------------------------------------------
 from network_dismantling.GND.gnd_nx import gnd_dismantle
 
 
@@ -486,9 +426,6 @@ def _gnd_dismantler(G: nx.Graph, remove_strategy: int = 3, seed: int = None, **k
     return _fill_remaining(G, seq)
 
 
-# ---------------------------------------------------------------------------
-# EI (Python reimplementation)
-# ---------------------------------------------------------------------------
 from network_dismantling.EI.ei_nx import ei_dismantle
 
 
@@ -522,9 +459,6 @@ def _egnd_dismantler(G: nx.Graph, runs: int = 10, remove_strategy: int = 3, seed
     return _fill_remaining(G, best_seq)
 
 
-# ---------------------------------------------------------------------------
-# Vertex Entanglement (networkx version)
-# ---------------------------------------------------------------------------
 from network_dismantling.vertex_entanglement.vertex_entanglement_nx import VertexEnt_nx
 
 
@@ -543,9 +477,6 @@ def _vertex_entanglement_dismantler(G: nx.Graph, **kwargs) -> List[int]:
     return nodes
 
 
-# ---------------------------------------------------------------------------
-# GDM (Graph Dismantling Machine) - networkx reimplementation
-# ---------------------------------------------------------------------------
 from network_dismantling.GDM.predictors_nx import gdm_dismantle_from_path
 
 
@@ -573,36 +504,5 @@ def _gdm_reinsertion_dismantler(G: nx.Graph, **kwargs) -> List[int]:
     return _fill_remaining(G, seq)
 
 
-# ---------------------------------------------------------------------------
-# FINDER_ND is intentionally disabled for the current BiT-HyRL experiments.
-# It depends on TensorFlow and is run separately in the finder_tf environment
-# when FINDER-specific experiments are needed.
-# ---------------------------------------------------------------------------
 _FINDER_AVAILABLE = False
 
-# try:
-#     from network_dismantling.FINDER_ND.python_interface_nx import finder_nd_dismantle
-#     _FINDER_AVAILABLE = True
-# except Exception as _e:
-#     _FINDER_AVAILABLE = False
-#     logger.warning(f"FINDER_ND not available: {_e}")
-#
-#
-# @register_method("FINDER")
-# def _finder_dismantler(G: nx.Graph, **kwargs) -> List[int]:
-#     """FINDER_ND dismantler (no reinsertion)."""
-#     if not _FINDER_AVAILABLE:
-#         raise RuntimeError("FINDER_ND is not available. Check FINDER_ND installation.")
-#     n = G.number_of_nodes()
-#     stop_frac = 1.0 / n if n > 0 else 0.01
-#     return finder_nd_dismantle(G, stop_condition=stop_frac, reinsertion=False, **kwargs)
-#
-#
-# @register_method("FINDER+R")
-# def _finder_reinsertion_dismantler(G: nx.Graph, **kwargs) -> List[int]:
-#     """FINDER_ND dismantler with reinsertion."""
-#     if not _FINDER_AVAILABLE:
-#         raise RuntimeError("FINDER_ND is not available. Check FINDER_ND installation.")
-#     n = G.number_of_nodes()
-#     stop_frac = 1.0 / n if n > 0 else 0.01
-#     return finder_nd_dismantle(G, stop_condition=stop_frac, reinsertion=True, **kwargs)

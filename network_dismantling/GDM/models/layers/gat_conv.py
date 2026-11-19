@@ -151,8 +151,6 @@ class GATConv(MessagePassing):
             elif isinstance(edge_index, SparseTensor):
                 edge_index = set_diag(edge_index)
 
-        # # propagate_type: (x: OptPairTensor, alpha: OptPairTensor)
-        # propagate_type: (x: PairTensor, alpha: OptPairTensor)
         out = self.propagate(edge_index,
                              x=(x_l, x_r),
                              alpha=(alpha_l, alpha_r),
@@ -185,10 +183,6 @@ class GATConv(MessagePassing):
                 # edge_index: Tensor,
                 edge_index_j: Tensor,
                 ) -> Tensor:
-        # print("INDEX", index.tolist(), index.shape)
-        # print("EDGE INDEX", edge_index.tolist(), edge_index.shape)
-        #
-        # print("DIFF", index - edge_index[0])
         alpha = alpha_j if alpha_i is None else alpha_j + alpha_i
         alpha = F.leaky_relu(alpha, self.negative_slope)
         # alpha = softmax(alpha, edge_index[0], ptr, size_i)

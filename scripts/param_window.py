@@ -1,32 +1,8 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""参数 c 的双侧可行窗口：效率给下界，定向攻击鲁棒性给上界。
+"""Two-sided feasible window for ``c``.
 
-用法（直接放进 repo 的 scripts/ 即可，零第三方依赖）：
-
-    # 1) 只有解析效率式 + 实测 R 曲线
-    python scripts/param_window.py --N 100 --kbar 6 --E-star 0.35 --R-star 0.50 \
-        --curve-r results/r_tar_BA100.csv
-
-    # 2) 两条曲线都实测（推荐：解析式偏保守，最多偏大 2-3 倍）
-    python scripts/param_window.py --N 100 --kbar 6 --E-star 0.35 --R-star 0.50 \
-        --curve-e results/e_BA100.csv --curve-r results/r_tar_BA100.csv \
-        --delta-r 0.01 --Kmin 2
-
-    # 3) 自检 / 回归测试
-    python scripts/param_window.py --demo
-    python scripts/param_window.py --selftest
-
-CSV 格式：两列 `c,value`，允许表头，允许乱序（内部会排序）。
-value 对 --curve-e 是归一化效率 E，对 --curve-r 是指标 R_t（越大越鲁棒）。
-
-三个已写进论文的限定（见 paper_snippet_*.tex）：
-  L1 天花板：E_dir 在 K=N-1 处取到 (N+2)/(2N)≈0.5，E* 越过它时解析法报"无解"是假象，
-     真正的问题是结构族不可达，应换结构而不是调 c。
-  L2 保守度：E_dir 丢弃的成对贡献恒为非负，K 较小时可达 2-8 倍，故解析 c_E 是充分不必要，
-     会系统性偏大；凡有实测 E(c) 必须用数值反解。
-  L3 单调性：c_R = max{c: R_t(c) >= R*} 只在 R_t 单调不增时才等价于"区间处处可行"。
-     R_t 有回升（双峰）时 max 会跳到右侧孤立分支，必须取"最左连通可行段的上确界"。
+Efficiency gives the lower bound and targeted-attack robustness the upper bound;
+the script reports both plus the envelope between them.
 """
 
 from __future__ import annotations
@@ -40,11 +16,10 @@ from typing import Iterable, List, Optional, Sequence, Tuple
 
 EPS = 1e-9
 
-# ---------------------------------------------------------------- 状态码
 OK = "ok"
-OK_DEGRADED = "ok_single_sided"          # 只有下界（无上界曲线）
+OK_DEGRADED = "ok_single_sided"
 CEILING_UNREACHABLE = "ceiling_unreachable"
-STRUCTURAL_CAP = "structural_cap_binding"  # 边预算/残余连通给出的 K 上限被效率下界顶穿
+STRUCTURAL_CAP = "structural_cap_binding"
 EFF_UNREACHABLE = "efficiency_unreachable_on_curve"
 R_UNREACHABLE = "robustness_unreachable_on_curve"
 NO_OVERLAP = "empty_intersection"
@@ -52,31 +27,30 @@ OUT_OF_DOMAIN = "window_outside_curve_domain"
 BAD_INPUT = "bad_input"
 
 STATUS_ZH = {
-    OK: "可行",
-    OK_DEGRADED: "可行（仅下界，上界缺失）",
-    CEILING_UNREACHABLE: "结构族不可达：E* 超过解析天花板",
-    STRUCTURAL_CAP: "稀疏图边预算不足：E* 需要的最小度超过结构上限",
-    EFF_UNREACHABLE: "效率曲线在采样域内未达到 E*",
-    R_UNREACHABLE: "鲁棒曲线在采样域内全部低于 R*",
-    NO_OVERLAP: "真冲突：下界高于上界",
-    OUT_OF_DOMAIN: "窗口落在采样域之外",
-    BAD_INPUT: "输入非法",
+    OK: "feasible",
+    OK_DEGRADED: "feasible, lower bound only",
+    CEILING_UNREACHABLE: "family unreachable: E* above the analytic ceiling",
+    STRUCTURAL_CAP: "edge budget too small: the degree E* needs exceeds the structural cap",
+    EFF_UNREACHABLE: "the efficiency curve never reaches E* on the sampled range",
+    R_UNREACHABLE: "the robustness curve stays below R* on the sampled range",
+    NO_OVERLAP: "conflict: the lower bound exceeds the upper bound",
+    OUT_OF_DOMAIN: "the window lies outside the sampled range",
+    BAD_INPUT: "invalid input",
 }
 
 
-# ---------------------------------------------------------------- 解析式
 def efficiency_direct(K: float, N: int) -> float:
-    """E_dir(K) = K(K+3) / (2N(N-1))，K = c*kbar 为枢纽的直接邻居数。"""
+    """E_dir(K) = K(K+3) / (2N(N-1)), where K = c*kbar is the hub degree."""
     return K * (K + 3.0) / (2.0 * N * (N - 1))
 
 
 def efficiency_ceiling(N: int) -> float:
-    """单枢纽星形族在 K=N-1 处取到的效率上限 (N+2)/(2N)。"""
+    """Efficiency ceiling (N+2)/(2N), reached by the single-hub family at K = N-1."""
     return (N + 2.0) / (2.0 * N)
 
 
 def c_lower_analytic(N: int, kbar: float, E_star: float) -> Optional[float]:
-    """解析下界；E* >= 天花板时返回 None（不是"参数无解"，而是族不可达）。"""
+    """Analytic lower bound; None when E* is at or above the ceiling, i.e. the family is unreachable."""
     if N < 2 or kbar <= 0:
         return None
     if E_star <= 0:
@@ -87,22 +61,12 @@ def c_lower_analytic(N: int, kbar: float, E_star: float) -> Optional[float]:
 
 
 def c_upper_analytic_symmetric(N: int, kbar: float, E_star: float) -> Optional[float]:
-    """对称参考：把 E_dir 当"上界"用会得到的 c（仅用于论文里对比保守度，不要真用）。"""
+    """Symmetric reference: the c obtained by treating E_dir as an upper bound."""
     return c_lower_analytic(N, kbar, E_star)
 
 
 def conservativeness_envelope(N: int, K: float) -> Tuple[float, float]:
-    """L2 的定量包络：E_dir 最多低估真实效率多少倍，以及 c_E 最多偏大多少倍。
-
-    设 M = N-1-K 个节点不直接连枢纽。被 E_dir 丢弃的成对贡献（按有序对×权重计）为
-        KM + M(M-1)/2,
-    基准项为 K(K+3)/2，故
-        E_true / E_dir <= 1 + M(2K+M-1) / (K(K+3)),
-    等号在"所有被丢弃的点对都恰好是距离 2"时取到。又 E ~ K(K+3)，
-    故解析下界给出的 c 最多偏大 sqrt(该比值) 倍。
-
-    返回 (E 比值, c 比值)。
-    """
+    """How far E_dir underestimates efficiency, and how far c_E is off, in the worst case."""
     if N < 2 or K <= 0:
         return (1.0, 1.0)
     K = min(float(K), N - 1.0)
@@ -116,35 +80,16 @@ def k_from_c(c: float, kbar: float) -> float:
 
 
 def degree_budget_cap(N: int, M: int, residual_connected: bool = True) -> Optional[int]:
-    """稀疏图上真正的硬约束：边预算给出的枢纽度上限 K_cap。
-
-    整图连通只要求 M >= N-1，这本身几乎不约束 K；但任何以"抗定向攻击"为目标的构造
-    都必须满足一个更强的设计前提——**移除枢纽后残余子网仍然连通**，否则枢纽是唯一的
-    单点，R_t 会直接崩到 0。残余的 (N-1) 个节点连通至少需要 (N-2) 条边，于是
-
-        K <= M - (N-2) .
-
-    在 k̄ ≈ 2.0 的树上右边等于 1：**根本放不下任何枢纽**，这正是稀疏 ISP 上双峰构造
-    失效的算术原因。relaxed=True 时放弃该前提，退化为 K <= N-1（此时鲁棒性目标会替你
-    把 K 压回来，但不该用解析效率去定 K）。
-    """
+    """Hard constraint on sparse graphs: the hub degree cap K_cap implied by the edge budget."""
     if M is None or not residual_connected:
         return None
     if M < N - 1:
-        raise ValueError(f"M={M} < N-1={N - 1}：图不连通")
-    # 密图上 M-(N-2) 会超过 N-1（枢纽不可能连比自己多的节点），必须截断。
-    # 这一点在小而稠密的真实拓扑上会真的发生（Eon 19/37: 37-17=20 > 18）。
+        raise ValueError(f"M={M} < N-1={N - 1}: the graph cannot be connected")
     return int(min(M - (N - 2), N - 1))
 
 
 def kbar_threshold(E_star: float) -> float:
-    """解析路径在"残余连通"前提下的适用门槛：k̄ >= 2 + sqrt(8 E*)。
-
-    推导：K_cap = M-(N-2) = N(k̄/2-1)+2 ≈ N(k̄-2)/2，于是
-        E_dir(K_cap) ≈ K_cap² / (2N²) = (k̄-2)²/8 .
-    要 E_dir(K_cap) >= E*，需 k̄ >= 2 + sqrt(8E*)。E*=0.10 -> 2.89，E*=0.20 -> 3.26。
-    这与实验侧"BiT 在 k̄≳3 才稳"的经验区间一致，是它的解析来源。
-    """
+    """Applicability threshold of the analytic path with a connected residual: kbar >= 2 + sqrt(8 E*)."""
     if E_star <= 0:
         return 2.0
     return 2.0 + math.sqrt(8.0 * E_star)
@@ -165,9 +110,8 @@ def cap_report(N: int, M: int, kbar: float) -> dict:
     }
 
 
-# ---------------------------------------------------------------- 序列工具
 def _runs(flags: Sequence[bool]) -> List[Tuple[int, int]]:
-    """返回 True 的连通段 [start, end) 列表。"""
+    """Contiguous True runs, as [start, end) pairs."""
     out, start = [], None
     for i, f in enumerate(flags):
         if f and start is None:
@@ -181,12 +125,7 @@ def _runs(flags: Sequence[bool]) -> List[Tuple[int, int]]:
 
 
 def tail_run_start(flags: Sequence[bool]) -> Optional[int]:
-    """末尾连通可行段的起点；末尾不可行则返回 None。
-
-    单调递增指标（效率）用它：取"一旦满足就一直满足到右端"的那段的左端。
-    非单调时这比 inf{c: E>=E*} 安全——后者会把左侧孤立可行岛当成下界，
-    导致区间里混入不可行点。
-    """
+    """Start of the trailing feasible run, or None when the tail is infeasible."""
     if not flags or not flags[-1]:
         return None
     i = len(flags) - 1
@@ -196,11 +135,7 @@ def tail_run_start(flags: Sequence[bool]) -> Optional[int]:
 
 
 def head_run_end(flags: Sequence[bool]) -> Optional[int]:
-    """开头连通可行段的终点（开区间）；开头不可行则返回 None。
-
-    单调不增指标（定向鲁棒性）用它：取"从最左一直满足到某处"的那段的右端。
-    这就是 L3：不能用 max{c: R>=R*}，否则双峰曲线会跳到右侧孤立分支。
-    """
+    """End (exclusive) of the leading feasible run, or None when the head is infeasible."""
     if not flags or not flags[0]:
         return None
     i = 0
@@ -210,14 +145,14 @@ def head_run_end(flags: Sequence[bool]) -> Optional[int]:
 
 
 def pava_increasing(ys: Sequence[float], w: Optional[Sequence[float]] = None) -> List[float]:
-    """保序回归（递增），用于压掉有限样本噪声造成的假非单调。"""
+    """Isotonic regression, used to suppress spurious non-monotonicity from finite samples."""
     n = len(ys)
     if n == 0:
         return []
     w = list(w) if w is not None else [1.0] * n
     vals = [float(y) for y in ys]
     wts = [float(x) for x in w]
-    blocks: List[List[float]] = []  # [value, weight, count]
+    blocks: List[List[float]] = []
     for v, wt in zip(vals, wts):
         blocks.append([v, wt, 1])
         while len(blocks) > 1 and blocks[-2][0] > blocks[-1][0] + EPS:
@@ -236,7 +171,7 @@ def pava_decreasing(ys: Sequence[float]) -> List[float]:
 
 
 def _trend(xs: Sequence[float], ys: Sequence[float]) -> int:
-    """粗判趋势：+1 递增，-1 递减，0 非单调（按有效步数占比）。"""
+    """Coarse trend: +1 increasing, -1 decreasing, 0 non-monotone."""
     up = down = 0
     for i in range(1, min(len(xs), len(ys))):
         d = ys[i] - ys[i - 1]
@@ -258,7 +193,6 @@ def _sort_curve(curve: Iterable[Tuple[float, float]]) -> Tuple[List[float], List
     pts = sorted((float(x), float(y)) for x, y in curve)
     xs = [p[0] for p in pts]
     ys = [p[1] for p in pts]
-    # 去掉重复 x（保留最后出现的一个）
     ux, uy = [], []
     for x, y in zip(xs, ys):
         if ux and abs(x - ux[-1]) <= EPS:
@@ -284,7 +218,6 @@ def _interp(xs: Sequence[float], ys: Sequence[float], x: float) -> Optional[floa
     return ys[-1]
 
 
-# ---------------------------------------------------------------- 结果对象
 @dataclass
 class Window:
     status: str
@@ -329,10 +262,10 @@ class Window:
             L.append(f"c upper     : {self.c_hi:.4f}   [{self.source_upper}]")
         if (self.c_lo is not None and self.c_hi is not None
                 and self.status in (OK, OK_DEGRADED) and self.c_hi >= self.c_lo):
-            L.append(f"c window    : [{self.c_lo:.4f}, {self.c_hi:.4f}]  宽度 {self.c_hi - self.c_lo:.4f}")
+            L.append(f"c window    : [{self.c_lo:.4f}, {self.c_hi:.4f}]  width {self.c_hi - self.c_lo:.4f}")
         if (self.K_lo is not None and self.K_hi is not None
                 and self.status in (OK, OK_DEGRADED)):
-            L.append(f"K window    : [{self.K_lo}, {self.K_hi}]  ({self.K_hi - self.K_lo + 1} 个整数点)")
+            L.append(f"K window    : [{self.K_lo}, {self.K_hi}]  ({self.K_hi - self.K_lo + 1} integer points)")
         elif self.K_lo is not None and self.status in (OK, OK_DEGRADED):
             L.append(f"K lower     : {self.K_lo}")
         if self.ok:
@@ -344,7 +277,6 @@ class Window:
         return "\n".join(L)
 
 
-# ---------------------------------------------------------------- 主入口
 def compute_window(
     N: int,
     kbar: float,
@@ -359,57 +291,52 @@ def compute_window(
     M: Optional[int] = None,
     residual_connected: bool = True,
 ) -> Window:
-    """返回 c 的双侧可行窗口。E 越大越好 -> 下界；R_t 越大越好且随 c 递减 -> 上界。
-
-    M/residual_connected: 给出边数后启用"稀疏图边预算"上限 K <= M-(N-2)，
-    稀疏 ISP（k̄≈2.3-2.5）上它会先于 N-1 与鲁棒性上界把窗口压没。
-    """
+    """Two-sided feasible window for c: efficiency gives the lower bound, robustness the upper."""
     w = Window(status=OK, N=N, kbar=kbar)
 
     if N < 2:
         w.status = BAD_INPUT
-        w.warnings.append("N 必须 >= 2")
+        w.warnings.append("N must be >= 2")
         return w
     if kbar <= 0:
         w.status = BAD_INPUT
-        w.warnings.append("kbar 必须 > 0")
+        w.warnings.append("kbar must be > 0")
         return w
     if E_star < 0 or (R_star is not None and R_star < 0):
         w.status = BAD_INPUT
-        w.warnings.append("E*/R* 不能为负")
+        w.warnings.append("E* and R* cannot be negative")
         return w
 
     w.detail["E_dir_ceiling"] = round(efficiency_ceiling(N), 4)
 
-    # ---- 下界：效率
     if curve_e is not None:
         xs, ys = _sort_curve(curve_e)
         if len(xs) < 3:
             w.status = BAD_INPUT
-            w.warnings.append("效率曲线采样点太少（<3）")
+            w.warnings.append("too few samples on the efficiency curve (<3)")
             return w
         flags = [y >= E_star - EPS for y in ys]
         trend = _trend(xs, ys)
         if trend <= 0:
             w.warnings.append(
-                f"效率曲线趋势判为 {'非单调' if trend == 0 else '递减'}，与假设相反："
-                "请确认指标定义/自变量方向（L3 同样适用于此处）"
+                f"the efficiency curve looks {'non-monotone' if trend == 0 else 'decreasing'}, contrary to the assumption: "
+                "check the metric definition and the direction of the independent variable"
             )
         idx = tail_run_start(flags)
         if idx is None:
             w.status = EFF_UNREACHABLE
             w.warnings.append(
-                f"采样域 [{xs[0]:g},{xs[-1]:g}] 内效率未达到 E*={E_star}；"
-                + ("E* 超过解析天花板，需换结构族（L1）"
-                   if E_star >= efficiency_ceiling(N) else "请扩大 c 采样范围")
+                f"efficiency does not reach E*={E_star} on [{xs[0]:g}, {xs[-1]:g}]; "
+                + ("E* is at or above the analytic ceiling, so the family must change"
+                   if E_star >= efficiency_ceiling(N) else "widen the c sampling range")
             )
             w.detail["E_max_on_curve"] = round(max(ys), 4)
             return w
         runs = _runs(flags)
         if len(runs) > 1:
             w.warnings.append(
-                f"效率曲线可行集不连通（{len(runs)} 段），已取右端连通段："
-                f"[{xs[runs[-1][0]]:.3g},{xs[runs[-1][1] - 1]:.3g}]，左端孤岛 {len(runs) - 1} 个被忽略"
+                f"the feasible set of the efficiency curve is disconnected ({len(runs)} runs); using the rightmost: "
+                f"[{xs[runs[-1][0]]:.3g}, {xs[runs[-1][1] - 1]:.3g}]; {len(runs) - 1} isolated runs on the left ignored"
             )
         w.c_lo = xs[idx]
         w.source_lower = "numeric"
@@ -419,67 +346,64 @@ def compute_window(
         if cE is None:
             w.status = CEILING_UNREACHABLE
             w.warnings.append(
-                f"E*={E_star} >= 单枢纽族效率上限 (N+2)/(2N)={efficiency_ceiling(N):.4f}："
-                "c 无论取多大都达不到，须换结构族（L1），不要继续调 c"
+                f"E*={E_star} >= the single-hub ceiling (N+2)/(2N)={efficiency_ceiling(N):.4f}: "
+                "no value of c reaches it, so the family must change rather than c"
             )
             return w
         w.c_lo = cE
-        w.source_lower = "analytic(E_dir, 充分不必要, 偏保守 L2)"
+        w.source_lower = "analytic(E_dir, sufficient but not necessary)"
         w.detail["E_dir_at_c_lo"] = round(efficiency_direct(cE * kbar, N), 6)
         ratio_e, ratio_c = conservativeness_envelope(N, cE * kbar)
         w.detail["conservative_x"] = round(ratio_c, 2)
         if ratio_c >= 1.15:
             w.warnings.append(
-                f"解析下界按「残余点对全为距离2」的上包络，c 最多偏大 {ratio_c:.2f} 倍"
-                f"（E 最多低估 {ratio_e:.1f} 倍，K={cE * kbar:.1f}）；有实测 E(c) 时务必改用数值反解"
+                f"the analytic bound assumes distance 2 for every residual pair, so c can be up to {ratio_c:.2f}x too large"
+                f" (E underestimated by up to {ratio_e:.1f}x, K={cE * kbar:.1f}); use the numeric inverse when E(c) is measured"
             )
 
-    # ---- 上界：定向攻击鲁棒性
     if curve_r is None:
         w.status = OK_DEGRADED
         target = R_star if R_star is not None else float("nan")
         w.warnings.append(
-            f"未提供 R_t(c) 曲线，上界缺失 -> 退化为单侧（c >= {w.c_lo:.4f}）。"
-            f"注意随机失效鲁棒性随 c 递增，同样只给下界，不能替代上界（R*={target}）"
+            f"no R_t(c) curve, so there is no upper bound; the window is one-sided (c >= {w.c_lo:.4f})."
+            f"random-failure robustness increases with c, so it gives another lower bound (R*={target})"
         )
     else:
         xs, ys = _sort_curve(curve_r)
         if len(xs) < 3:
             w.status = BAD_INPUT
-            w.warnings.append("鲁棒曲线采样点太少（<3）")
+            w.warnings.append("too few samples on the robustness curve (<3)")
             return w
         if R_star is None:
             w.status = BAD_INPUT
-            w.warnings.append("给了 R 曲线但没给 R*")
+            w.warnings.append("an R curve was given without R*")
             return w
         thr = R_star + delta_r
 
-        # 可行性判定一律用**原始**采样点，不用平滑值：平滑会凭空造出/抹掉可行点。
         flags = [y >= thr - EPS for y in ys]
         end = head_run_end(flags)
         if end is None:
             w.status = R_UNREACHABLE
-            w.warnings.append(f"最小的 c={xs[0]:g} 处 R_t 已低于 R*={R_star}（+δ={delta_r}）")
+            w.warnings.append(f"R_t is already below R*={R_star} at the smallest c={xs[0]:g} (delta={delta_r})")
             w.detail["R_at_c_min"] = round(ys[0], 4)
             return w
         runs = _runs(flags)
         if len(runs) > 1:
             island = runs[1:]
             w.warnings.append(
-                "R_t 非单调：检测到右侧孤立可行岛 "
+                "R_t is non-monotone: an isolated feasible run on the right "
                 + ", ".join(f"[{xs[a]:.3g},{xs[b - 1]:.3g}]" for a, b in island)
-                + "；按 L3 已忽略（max 取法会误选它们）"
+                + "; ignored, since taking the maximum would select it"
             )
         w.c_hi = xs[end - 1]
-        w.source_upper = "leftmost-run(数值)" if len(runs) > 1 else "numeric"
+        w.source_upper = "leftmost run (numeric)" if len(runs) > 1 else "numeric"
         w.detail["R_at_c_hi"] = round(ys[end - 1], 4)
 
-        # 保序回归只用于两件事：判趋势、给一个更保守的备选上界
         ys_sm = pava_decreasing(ys) if smooth else list(ys)
         trend = _trend(xs, ys_sm)
         if trend >= 0:
             w.warnings.append(
-                f"R_t 趋势判为 {'递增' if trend == 1 else '非单调'}：若指标随 c 递增，它给的是下界而非上界（L3）"
+                f"R_t looks {'increasing' if trend == 1 else 'non-monotone'}: an increasing metric gives a lower bound, not an upper one"
             )
         elif smooth and any(abs(a - b) > 1e-6 for a, b in zip(ys, ys_sm)):
             flags_sm = [y >= thr - EPS for y in ys_sm]
@@ -487,10 +411,9 @@ def compute_window(
             if end_sm is not None and end_sm - 1 < end - 1:
                 w.detail["c_hi_smoothed"] = round(xs[end_sm - 1], 4)
                 w.warnings.append(
-                    f"保序回归后上界更紧（{xs[end_sm - 1]:.4g} < {w.c_hi:.4g}），若噪声大建议取前者"
+                    f"the isotonic fit gives a tighter upper bound ({xs[end_sm - 1]:.4g} < {w.c_hi:.4g})"
                 )
 
-    # ---- 与 c 定义域求交
     lo_b, hi_b = c_bounds
     if w.c_lo is not None and lo_b > 0:
         w.c_lo = max(w.c_lo, lo_b)
@@ -500,13 +423,11 @@ def compute_window(
             w.status = OUT_OF_DOMAIN
             return w
 
-    # ---- 整数化
     K_lo_raw = w.c_lo * kbar
     K_lo = int(math.ceil(K_lo_raw - 1e-9))
     K_lo = max(K_lo, int(K_min))
     K_cap = int(N - 1)
 
-    # 稀疏图（ISP）上的真正硬约束：边预算 + 残余连通
     K_struct = None
     if M is not None:
         try:
@@ -525,14 +446,14 @@ def compute_window(
         if K_struct is not None and K_lo > K_struct:
             w.status = STRUCTURAL_CAP
             w.warnings.append(
-                f"稀疏图边预算不足：效率要求 K >= {K_lo}，但枢纽度受 M-(N-2)={K_struct} 限制"
-                f"（c_cap={K_struct / kbar:.2f}）。解析路径在该数据集上只能覆盖 "
+                f"edge budget too small: efficiency needs K >= {K_lo}, but the hub degree is capped at M-(N-2)={K_struct}"
+                f" (c_cap={K_struct / kbar:.2f}); the analytic path covers "
                 f"E* <= E_dir(K_cap)={efficiency_direct(K_struct, N):.4f}；"
-                "若实测 E(c) 明显高于 E_dir，可改用数值反解重算"
+                "if the measured E(c) is well above E_dir, use the numeric inverse"
             )
         else:
             w.status = OUT_OF_DOMAIN
-            w.warnings.append(f"K 下界 {K_lo} 超过单枢纽最大度 N-1={K_cap}：结构族不可达（L1）")
+            w.warnings.append(f"lower bound K={K_lo} exceeds the hub degree cap {K_cap}: the family is unreachable")
         return w
 
     if w.c_hi is not None:
@@ -543,37 +464,35 @@ def compute_window(
             w.detail["K_need_min"] = K_lo
             w.detail["K_need_max"] = K_hi
             w.warnings.append(
-                f"空交集：K 需同时 >= {K_lo}（效率）与 <= {K_hi}（鲁棒），相差 {K_lo - K_hi}。"
-                "此时不是参数问题，须改结构族或放宽 E*/R*"
+                f"empty intersection: K must be >= {K_lo} (efficiency) and <= {K_hi} (robustness), a gap of {K_lo - K_hi}."
+                "this is not a matter of tuning: change the family or relax E*/R*"
             )
             if w.source_lower.startswith("analytic"):
                 w.warnings.append(
-                    "下界来自解析式 E_dir（充分不必要，L2）：真实 E(c) 通常更高，"
-                    "这条'冲突'可能是假的，请提供实测 E(c) 曲线复核后再下结论"
+                    "the lower bound comes from E_dir (sufficient but not necessary); the real E(c) is usually higher, "
+                    "so this conflict may be an artefact; check it against a measured E(c) curve"
                 )
             if w.c_hi - w.c_lo <= 1e-9:
                 w.warnings.append(
-                    f"可行 c 集合退化为单点 c≈{w.c_lo:.4g}（宽度 0）：K 必须恰好等于 "
-                    f"{w.c_lo * kbar:.2f} 而它非整数，故 K 空间必然为空。加密 c 网格或改用连续 K"
+                    f"the feasible set collapses to the single point c={w.c_lo:.4g}: K would have to be exactly "
+                    f"{w.c_lo * kbar:.2f}, which is not an integer, so the K set is empty by construction"
                 )
             return w
         w.K_lo, w.K_hi = K_lo, K_hi
     else:
         w.K_lo = K_lo
 
-    # ---- 窗口质量提示
     if w.c_hi is not None and curve_r is not None:
         xs, _ = _sort_curve(curve_r)
         dx = min((xs[i + 1] - xs[i] for i in range(len(xs) - 1)), default=0.0)
         if dx > 0 and (w.c_hi - w.c_lo) < dx:
             w.warnings.append(
-                f"窗口宽度 {w.c_hi - w.c_lo:.4f} < R 曲线网格间距 {dx:.4f}：边界由网格分辨率决定，"
-                "在不同 seed 间不可复现（加密网格或换连续指标）"
+                f"window width {w.c_hi - w.c_lo:.4f} < grid spacing {dx:.4f}: the bounds are set by the grid, "
+                "so they will not reproduce across seeds"
             )
     return w
 
 
-# ---------------------------------------------------------------- CLI / IO
 def load_curve(path: str) -> List[Tuple[float, float]]:
     rows: List[Tuple[float, float]] = []
     with open(path, "r", encoding="utf-8-sig", newline="") as f:
@@ -583,10 +502,10 @@ def load_curve(path: str) -> List[Tuple[float, float]]:
             try:
                 x, y = float(rec[0]), float(rec[1])
             except ValueError:
-                continue  # 表头
+                continue
             rows.append((x, y))
     if not rows:
-        raise SystemExit(f"曲线 {path} 解析不到数值行")
+        raise SystemExit(f"no numeric rows in {path}")
     return rows
 
 
@@ -598,23 +517,22 @@ DEMO_R_BUMP = [(2.5, 0.62), (3.0, 0.55), (3.6, 0.44), (4.2, 0.33), (4.8, 0.28), 
 
 def _demo() -> None:
     cases = [
-        ("A 正常：双侧窗口", dict(N=100, kbar=6, E_star=0.35, R_star=0.50,
+        ("A normal: two-sided window", dict(N=100, kbar=6, E_star=0.35, R_star=0.50,
                                   curve_e=DEMO_E, curve_r=DEMO_R_MONO)),
-        ("B 反例：R_t 双峰（L3）", dict(N=100, kbar=6, E_star=0.30, R_star=0.40,
+        ("B counter-example: bimodal R_t", dict(N=100, kbar=6, E_star=0.30, R_star=0.40,
                                        curve_e=DEMO_E, curve_r=DEMO_R_BUMP)),
-        ("C 天花板（L1）：E*=0.55", dict(N=100, kbar=6, E_star=0.55, R_star=0.50)),
-        ("D 真冲突：E* 与 R* 都要高", dict(N=100, kbar=6, E_star=0.78, R_star=0.60,
+        ("C ceiling: E*=0.55", dict(N=100, kbar=6, E_star=0.55, R_star=0.50)),
+        ("D genuine conflict: high E* and high R*", dict(N=100, kbar=6, E_star=0.78, R_star=0.60,
                                             curve_e=DEMO_E, curve_r=DEMO_R_MONO)),
-        ("E 只给解析式（L2 保守）", dict(N=100, kbar=6, E_star=0.35, R_star=0.50,
+        ("E analytic only (conservative)", dict(N=100, kbar=6, E_star=0.35, R_star=0.50,
                                          curve_r=DEMO_R_MONO)),
-        ("F 退化：无 R 曲线", dict(N=500, kbar=6, E_star=0.10)),
+        ("F degenerate: no R curve", dict(N=500, kbar=6, E_star=0.10)),
     ]
     for i, (name, kw) in enumerate(cases, 1):
         w = compute_window(**kw)
         print(f"\n=== {i}. {name} ===")
         print(w.report())
-    # 保守度对照
-    print("\n=== 解析 vs 数值 c_E 保守度 ===")
+    print("\n=== analytic vs numeric c_E ===")
     for N in (100, 500, 1000):
         for E_star in (0.10, 0.20, 0.35):
             cE = c_lower_analytic(N, 6.0, E_star)
@@ -624,11 +542,11 @@ def _demo() -> None:
             ratio_e, ratio_c = conservativeness_envelope(N, K)
             print(f"N={N:5d} E*={E_star:.2f}: c_E_analytic={cE:7.3f}  K={K:7.2f}  "
                   f"K_ceil={math.ceil(K)}  E_dir(K)={efficiency_direct(math.ceil(K), N):.4f}  "
-                  f"E 低估<={ratio_e:5.1f}x  c 偏大<={ratio_c:.2f}x")
+                  f"E underestimated by <= {ratio_e:5.1f}x, c too large by <= {ratio_c:.2f}x")
 
 
 def _main(argv: Optional[Sequence[str]] = None) -> int:
-    ap = argparse.ArgumentParser(description="c 的双侧可行窗口（效率下界 / 定向鲁棒上界）")
+    ap = argparse.ArgumentParser(description="two-sided feasible window for c (efficiency lower bound, robustness upper bound)")
     ap.add_argument("--N", type=int)
     ap.add_argument("--kbar", type=float, default=6.0)
     ap.add_argument("--E-star", dest="E_star", type=float)
@@ -637,11 +555,11 @@ def _main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--curve-r", dest="curve_r", default=None, help="CSV: c,R_t(c)")
     ap.add_argument("--Kmin", type=int, default=2)
     ap.add_argument("--edges", "--M", dest="M", type=int, default=None,
-                    help="图的边数（稀疏 ISP 必填，启用边预算上限 K<=M-(N-2)）")
+                    help="edge count (required for sparse ISPs; caps K at M-(N-2))")
     ap.add_argument("--allow-hub-star", dest="allow_hub_star", action="store_true",
-                    help="放弃'移除枢纽后残余仍连通'的前提（会放宽上限，但鲁棒性通常直接崩）")
+                    help="drop the connected-residual assumption (loosens the bound, but robustness usually collapses)")
     ap.add_argument("--delta-r", dest="delta_r", type=float, default=0.0,
-                    help="鲁棒性安全裕度，要求 R_t >= R* + delta")
+                    help="robustness margin: require R_t >= R* + delta")
     ap.add_argument("--no-smooth", action="store_true")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--demo", action="store_true")
@@ -654,7 +572,7 @@ def _main(argv: Optional[Sequence[str]] = None) -> int:
     if a.selftest:
         return 0 if run_selftest() else 1
     if a.N is None or a.E_star is None:
-        ap.error("需要 --N 与 --E-star（或用 --demo）")
+        ap.error("--N and --E-star are required (or use --demo)")
 
     w = compute_window(
         N=a.N, kbar=a.kbar, E_star=a.E_star, R_star=a.R_star,
@@ -671,7 +589,6 @@ def _main(argv: Optional[Sequence[str]] = None) -> int:
     return 0 if w.ok or w.status == NO_OVERLAP else 2
 
 
-# ---------------------------------------------------------------- 自检
 def run_selftest() -> bool:
     ok = True
 
@@ -680,41 +597,34 @@ def run_selftest() -> bool:
         print(("  PASS  " if cond else "  FAIL  ") + msg)
         ok = ok and cond
 
-    # 1) 反解精确
     for N, kbar, Es in [(100, 6, 0.20), (500, 6, 0.10), (50, 4, 0.45)]:
         cE = c_lower_analytic(N, kbar, Es)
         chk(cE is not None and abs(efficiency_direct(cE * kbar, N) - Es) < 1e-12,
-            f"c_E 反解精确 N={N} E*={Es}")
+            f"exact inverse for N={N}, E*={Es}")
 
-    # 2) ceil 恰好够、减一不够
     N, kbar, Es = 200, 6, 0.12
     K = math.ceil(c_lower_analytic(N, kbar, Es) * kbar)
-    chk(efficiency_direct(K, N) >= Es, f"K={K} 满足 E*")
-    chk(efficiency_direct(K - 1, N) < Es, f"K={K - 1} 不满足 E*（ceil 无多余）")
+    chk(efficiency_direct(K, N) >= Es, f"K={K} meets E*")
+    chk(efficiency_direct(K - 1, N) < Es, f"K={K - 1} misses E*, so the ceiling is tight")
 
-    # 3) 天花板
-    chk(c_lower_analytic(100, 6, 0.55) is None, "E*=0.55 在 N=100 判定为族不可达")
-    chk(abs(efficiency_direct(99, 100) - efficiency_ceiling(100)) < 1e-12, "K=N-1 处取到天花板")
+    chk(c_lower_analytic(100, 6, 0.55) is None, "E*=0.55 is unreachable at N=100")
+    chk(abs(efficiency_direct(99, 100) - efficiency_ceiling(100)) < 1e-12, "the ceiling is reached at K=N-1")
 
-    # 4) L3 反例：双峰 R_t，max 取法会跳到右侧岛
     w = compute_window(N=100, kbar=6, E_star=0.30, R_star=0.40, curve_e=DEMO_E, curve_r=DEMO_R_BUMP)
     chk(w.c_hi is not None and w.c_hi <= 3.6 + 1e-9,
-        f"双峰 R_t 下 c_hi={w.c_hi} 取最左段而非右侧岛（max 会给出 6.5）")
-    chk(any("孤立可行岛" in x for x in w.warnings), "已报告右侧孤立可行岛")
+        f"with a bimodal R_t, c_hi={w.c_hi} comes from the leftmost run, not the right-hand island")
+    chk(any("isolated feasible run" in x for x in w.warnings), "the isolated run is reported")
 
-    # 5) PAVA
     chk(pava_decreasing([0.5, 0.4, 0.45, 0.3]) == [0.45, 0.45, 0.45, 0.3]
         or all(a >= b - 1e-9 for a, b in zip(pava_decreasing([0.5, 0.4, 0.45, 0.3]),
                                              pava_decreasing([0.5, 0.4, 0.45, 0.3])[1:])),
-        "PAVA 输出单调不增")
+        "the isotonic fit is non-increasing")
 
-    # 6) 空交集
     w = compute_window(N=100, kbar=6, E_star=0.78, R_star=0.60, curve_e=DEMO_E, curve_r=DEMO_R_MONO)
-    chk(w.status == NO_OVERLAP, f"高 E*/R* 报空交集（得到 {w.status}）")
+    chk(w.status == NO_OVERLAP, f"high E*/R* reports an empty intersection (got {w.status})")
 
-    # 7) 退化单侧
     w = compute_window(N=500, kbar=6, E_star=0.10)
-    chk(w.status == OK_DEGRADED and w.c_hi is None, "无 R 曲线时退化为单侧并告警")
+    chk(w.status == OK_DEGRADED and w.c_hi is None, "without an R curve the window is one-sided")
     return ok
 
 

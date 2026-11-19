@@ -1,16 +1,15 @@
-# -*- coding: utf-8 -*-
-"""双峰网络 (bimodal) 的渗流鲁棒性 + 与效率的联合目标。
+"""Percolation robustness of the bimodal family, combined with efficiency.
 
-建模: 一个 hub 度 K, 其余 N-1 个节点度 k_min, 边数守恒 M = (K + (N-1)k_min)/2
-  => k_min = (2M - K)/(N-1) = (kbar*N - K)/(N-1)
-k_min 不是自由参数, 它被 K 唯一确定。k_min=1 <=> 残余是树/完美匹配 <=> 星形极限。
+One hub has degree K, the other N-1 nodes have degree k_min, and the edge count is
+conserved: M = (K + (N-1) k_min) / 2.  Hence k_min = (2M - K) / (N-1), so k_min is
+not a free parameter; k_min = 1 is the star limit.
 """
 from typing import Dict, Optional, Tuple
 import math
 
 
 def bimodal(N: int, M: float, K: float, r: Optional[float] = None) -> Dict:
-    """二模态度分布参数。r 默认 1/N（单 hub）。"""
+    """Degree-distribution moments of the bimodal family; r defaults to 1/N."""
     if r is None:
         r = 1.0 / N
     kbar = 2.0 * M / N
@@ -22,7 +21,7 @@ def bimodal(N: int, M: float, K: float, r: Optional[float] = None) -> Dict:
 
 
 def fc_random_moments(r: float, K: float, m1: float, m2: float) -> float:
-    """(7.64) 随机失效渗流阈值 —— 只用 (r, K, m1, m2)，便于喂实测矩。"""
+    """Random-failure percolation threshold (7.64) from (r, K, m1, m2)."""
     num = m2 - 2 * r * m1 * K - 2 * (1 - r) * m1 + r * K ** 2
     den = m2 - 2 * r * m1 * K - (1 - r) * m1 + r * K ** 2
     return num / den if den != 0 else float("nan")
@@ -30,7 +29,7 @@ def fc_random_moments(r: float, K: float, m1: float, m2: float) -> float:
 
 def fc_targeted_moments(r: float, K: float, m1: float,
                         m2: float) -> Tuple[float, int]:
-    """(7.65)/(7.66) 定向攻击渗流阈值，返回 (值, 分支号)。"""
+    """Targeted-attack percolation threshold (7.65)/(7.66); returns the value and branch."""
     A = m1 - r * K
     if A <= 0 or (A - (1 - r)) <= 0:
         return float("nan"), 0
@@ -40,21 +39,18 @@ def fc_targeted_moments(r: float, K: float, m1: float,
     den = K * (K - 1) * (1 - r)
     if den == 0:
         return float("nan"), 0
-    # 第二支（f_c < r：只移走部分枢纽）用的是 <k>^2 而不是二阶矩 m2。
-    # 数值核对（n=200, r=0.4, K=10, k_min=3）：<k>^2 版给 0.376，实测 0.373-0.392；
-    # m2 版给 0.593，且大于 r，与本支的前提 f_c < r 自相矛盾。单枢纽时本支不触发。
     return (m1 * m1 - 2 * r * m1 * K + r * K ** 2 - 2 * (1 - r) * m1) / den, 2
 
 
 def fc_random(N: int, M: float, K: float, r: Optional[float] = None) -> float:
-    """(7.64) 随机失效渗流阈值。r 默认 1/N（单枢纽）。"""
+    """Random-failure percolation threshold (7.64); r defaults to 1/N."""
     p = bimodal(N, M, K, r)
     return fc_random_moments(p["r"], K, p["m1"], p["m2"])
 
 
 def fc_targeted(N: int, M: float, K: float,
                 r: Optional[float] = None) -> Tuple[float, int]:
-    """(7.65)/(7.66) 定向攻击渗流阈值，返回 (值, 分支号)。"""
+    """Targeted-attack percolation threshold (7.65)/(7.66); returns the value and branch."""
     p = bimodal(N, M, K, r)
     return fc_targeted_moments(p["r"], K, p["m1"], p["m2"])
 
@@ -67,16 +63,13 @@ def robustness_fc(N: int, M: float, K: float,
 
 
 def kmin_bounds(N: int, M: float) -> Tuple[float, float]:
-    """在 K ∈ [1, N-1] 上 k_min 的可达区间。"""
+    """Range of k_min attainable over K in [1, N-1]."""
     kbar = 2.0 * M / N
     return ((kbar * N - (N - 1)) / (N - 1), (kbar * N - 1) / (N - 1))
 
 
-# --------------------------------------------------------------------------
-# 联合目标：给定 N, M，扫 K 求 argmax
-# --------------------------------------------------------------------------
 def sweep(N: int, M: float):
-    """返回 [{K, c, k_min, E, fc_rand, fc_tar, R}]，只保留可行 K。"""
+    """Return [{K, c, k_min, E, fc_rand, fc_tar, R}] for the feasible K only."""
     from param_window import efficiency_direct
     rows = []
     for K in range(1, N):
@@ -103,10 +96,10 @@ AGG = {
 
 def optimize(N: int, M: float, mode: str = "fc_avg",
              E_star: float = None, R_star: float = None):
-    """返回最优点 dict，并附 'corner' 标记（是否落在 K=N-1）。"""
+    """Best design, with a 'corner' flag for K = N-1."""
     rows = sweep(N, M)
     if not rows:
-        return dict(status="infeasible", note="k_min<1 对全部 K 成立")
+        return dict(status="infeasible", note="k_min < 1 for every K")
     fn = AGG[mode]
     cand = rows
     if E_star is not None:
@@ -114,7 +107,7 @@ def optimize(N: int, M: float, mode: str = "fc_avg",
     if R_star is not None:
         cand = [d for d in cand if min(d["fc_rand"], d["fc_tar"]) >= R_star - 1e-12]
     if not cand:
-        return dict(status="empty", note="加约束后无可行 K")
+        return dict(status="empty", note="no feasible K under these constraints")
     b = max(cand, key=fn)
     b = dict(b)
     b["status"] = "ok"
@@ -142,14 +135,11 @@ if __name__ == "__main__":
         print(f"  E = {b['E']:.4f}   fc_rand = {b['fc_rand']:.4f}   "
               f"fc_tar = {b['fc_tar']:.4f}   R = {b['R']:.4f}")
         print(f"  objective = {b['objective']:.4f}   corner(K=N-1)? {b['corner']}")
-        print(f"  k_min 可达区间 = [{b['k_min_band'][0]:.3f}, {b['k_min_band'][1]:.3f}]")
+        print(f"  k_min range = [{b['k_min_band'][0]:.3f}, {b['k_min_band'][1]:.3f}]")
 
 
-# --------------------------------------------------------------------------
-# 约束优化：max ½(E + R)  s.t.  E ≥ E*, fc_rand ≥ R*_r, fc_tar ≥ R*_t
-# --------------------------------------------------------------------------
 def _monotone_check(N: int, M: float):
-    """返回三条曲线在可行 K 上的单调性结论。"""
+    """Monotonicity of the three curves over the feasible K."""
     rows = sweep(N, M)
     def mono(key, sign):
         v = [d[key] for d in rows]
@@ -163,7 +153,7 @@ def _monotone_check(N: int, M: float):
 
 
 def _K_from_fc(N: int, M: float, key: str, thr: float, rising: bool):
-    """在扫描点上找 K 的临界值：rising -> 最小可行 K；否则 -> 最大可行 K。"""
+    """Critical K on the scan grid: the smallest feasible K when rising, otherwise the largest."""
     rows = sweep(N, M)
     ok = [d["K"] for d in rows if d[key] >= thr - 1e-12]
     if not ok:
@@ -173,39 +163,38 @@ def _K_from_fc(N: int, M: float, key: str, thr: float, rising: bool):
 
 def solve(N: int, M: float, E_star: float = None, R_r: float = None,
           R_t: float = None, kmin_min: float = 1.0):
-    """约束优化的解。目标 F=½(E+R) 在可行域上单调增 -> 取可行上端。"""
+    """Solve the constrained problem; F = (E + R) / 2 increases with K, so take the upper end."""
     from param_window import c_lower_analytic
     rows = sweep(N, M)
     if not rows:
-        return dict(status="infeasible", reason="k_min<1 对所有 K 成立")
+        return dict(status="infeasible", reason="k_min < 1 for every K")
     K_hi_struct = max(d["K"] for d in rows if d["k_min"] >= kmin_min - 1e-12)
 
     L, Ub, why = 1, K_hi_struct, []
     if E_star is not None:
         kr = c_lower_analytic(N, M * 2.0 / N, E_star)
         if kr is None:
-            return dict(status="infeasible", reason="E* 超过解析天花板 (N+2)/(2N)")
+            return dict(status="infeasible", reason="E* above the ceiling (N+2)/(2N)")
         kE = int(math.ceil(kr * (2.0 * M / N) - 1e-9))
         L = max(L, kE); why.append(f"E*>={E_star} -> K>={kE}")
     if R_r is not None:
         kr = _K_from_fc(N, M, "fc_rand", R_r, rising=True)
         if kr is None:
             return dict(status="infeasible",
-                        reason=f"fc_rand 全程 < {R_r}（最大 {max(d['fc_rand'] for d in rows):.4f}）")
+                        reason=f"fc_rand stays below {R_r} (max {max(d['fc_rand'] for d in rows):.4f})")
         L = max(L, kr); why.append(f"fc_rand>={R_r} -> K>={kr}")
     if R_t is not None:
         kt = _K_from_fc(N, M, "fc_tar", R_t, rising=False)
         if kt is None:
             return dict(status="infeasible",
-                        reason=f"fc_tar 全程 < {R_t}（最大 {max(d['fc_tar'] for d in rows):.4f}）")
+                        reason=f"fc_tar stays below {R_t} (max {max(d['fc_tar'] for d in rows):.4f})")
         Ub = min(Ub, kt); why.append(f"fc_tar>={R_t} -> K<={kt}")
 
     if L > Ub:
         gap = L - Ub
         return dict(status="empty", L=L, U=Ub, gap=gap,
-                    reason=f"下界 {L} > 上界 {Ub}，差 {gap} 个 K；两条鲁棒性要求互斥")
+                    reason=f"lower bound {L} > upper bound {Ub} by {gap} K steps; the two requirements conflict")
 
-    # F 单调增 -> 取 U；若因离散/非单调导致 U 不可行，向下找第一个可行点
     byK = {d["K"]: d for d in rows}
     K = Ub
     while K >= L:
@@ -221,20 +210,8 @@ def solve(N: int, M: float, E_star: float = None, R_r: float = None,
                 constraints=why)
 
 
-# --------------------------------------------------------------------------
-# 目标函数层：几何平均（log）与上限归一化线性（lin），以及 lambda 的刻度重参数化
-#
-# 关键结论（见 目标函数对比.md）：
-#   * log 对 E、R 的任意缩放不变 -> argmax 不变；lin 不是（E 换口径 200 倍会让
-#     lambda 临界从 0.11 掉到 0.00）。
-#   * 两者在**名义权重**下都是阶跃：lambda > 0.06 全部落到角点 K=N-1。原因是
-#     前沿斜率 |dlnR/dlnE| <= 0.35，而权重比 w/(1-w) 在 lambda=0.5 时等于 1，
-#     比前沿任何一点都陡 3-100 倍 -> 切点只能在端点。
-#   * 修法：把 lambda 定义在**斜率刻度**上，w(lambda) = lambda*S/(1+lambda*S)，
-#     S = 前沿最大斜率。此时 lambda 线性扫过整个前沿。
-# --------------------------------------------------------------------------
 def pareto_front(N: int, M: float):
-    """E、R 都越大越好时的非支配集，按 K 升序。"""
+    """Non-dominated set when both E and R are maximised, in ascending K."""
     rows = sweep(N, M)
     nd = []
     for d in rows:
@@ -246,7 +223,7 @@ def pareto_front(N: int, M: float):
 
 
 def slope_profile(front, log_scale: bool = True):
-    """前沿各段的 |dR/dE|（或 |dlnR/dlnE|），以及最大值。"""
+    """Per-segment |dR/dE| (or |dlnR/dlnE|) along the front, and its maximum."""
     s = []
     for i in range(len(front) - 1):
         a, b = front[i], front[i + 1]
@@ -265,13 +242,13 @@ def slope_span(N: int, M: float, log_scale: bool = True) -> float:
 
 
 def weight_from_lambda(lam: float, S: float) -> float:
-    """lambda 的斜率刻度 -> 实际权重 w（乘在 E 上）。"""
+    """Convert a lambda setting into the weight w applied to E."""
     return lam * S / (1.0 + lam * S)
 
 
 def evaluate(N: int, M: float, lam: float, obj: str = "log",
              reparam: bool = True):
-    """给定偏好 lambda（0=最鲁棒，1=最效率），返回最优点及其诊断。"""
+    """Best design for a preference lambda (0 = most robust, 1 = most efficient)."""
     rows = sweep(N, M)
     front = pareto_front(N, M)
     S = slope_span(N, M, log_scale=(obj == "log"))
@@ -295,7 +272,7 @@ def evaluate(N: int, M: float, lam: float, obj: str = "log",
 
 
 def dial(N: int, M: float, t: float):
-    """直接按前沿位置 t 取设计（t=0 最鲁棒，t=1 最效率）。不经过任何权重。"""
+    """Pick a design by its position t on the front (0 = most robust, 1 = most efficient)."""
     front = pareto_front(N, M)
     if len(front) == 1:
         d = dict(front[0]); d.update(t=1.0, degenerate=True); return d

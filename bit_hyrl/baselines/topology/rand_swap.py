@@ -1,18 +1,7 @@
-"""RAND-SWAP topology baseline -- the degree-preserving null model.
+"""RAND-SWAP baseline: the degree-preserving null model.
 
-Accepts every legal 2-switch, never looks at robustness.  The result has exactly the
-input's ``N``, ``M`` and **degree sequence**, but randomised correlations, so it is
-the reference against which any claim of the form "our rewiring helps" must be read:
-
-* ``R(RAND-SWAP) ~ R(input)``  -> the metric is blind to correlations and the whole
-  comparison is carried by the degree sequence;
-* ``R(RAND-SWAP) > R(input)``  -> part of the gain reported by *any* method is just
-  the destruction of the original (often disassortative / geometric) correlations;
-* ``R(method) > R(RAND-SWAP)`` -> the method beats a same-budget randomiser, which is
-  the weakest defensible statement for a topology paper.
-
-It is also the only baseline that is exactly budget-neutral in ``M``: the 2-switch
-conserves the edge count, so no reviewer can attribute a gain to extra links.
+Accepts every legal 2-switch, so the output keeps ``N``, ``M`` and the degree
+sequence but randomises the correlations.
 """
 
 from __future__ import annotations

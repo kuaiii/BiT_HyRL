@@ -1,20 +1,4 @@
-"""Merge the attack-coverage shards and emit the six-attack comparison table.
-
-The main tables in the manuscript use the balanced two-mode protocol (targeted vs
-random).  This script answers the reviewer question that protocol leaves open: does
-the ranking survive if the targeted attack is something other than degree ordering?
-
-It reads the four shard directories written by ``method-matrix`` plus the two ablation
-shards, checks that every (strategy, attack, graph, seed) cell is present exactly once,
-and writes
-
-* ``results/attack_cov/attack_coverage.csv`` — long table, one row per cell;
-* ``paper_tables/tab_attack_coverage.tex``      — the manuscript table.
-
-Usage
------
-    python scripts/attack_coverage.py --out "../../02-第二次投稿 RESS/rebuttal/paper_tables"
-"""
+"""Merge the attack-coverage shards and emit the six-attack comparison table."""
 
 from __future__ import annotations
 
@@ -37,32 +21,14 @@ NINE = ("BA-100", "BA-200", "BA-300", "BA-400", "BA-500",
 ATTACKS = ("degree", "betweenness", "closeness", "coreness", "eigenvector", "random")
 TARGETED = ATTACKS[:-1]
 
-#: the proposed method plus every external baseline; the three ablation arms are
-#: controls rather than competitors and stay in Table 5 on the balanced protocol
 ORDER = ("BiT-HyRL", "UNITY", "QDLM", "FRED-ABL", "Eff-R-Net", "ONION", "ROMEN",
          "MWCL-sim", "MADQN-sim", "KMedian", "Random-placement")
 
-#: baselines of Table 5 that cannot appear in this table, mapped to the topologies
-#: they did not finish on.  Their cell means would average a smaller graph set than
-#: every other row, so they are dropped from ``ORDER`` and the caption must say so
-#: explicitly — an unexplained omission reads like a selection effect.
-#:
-#: ROMEN used to be listed here (it was never completed on BA-400/BA-500); the
-#: seed-sharded re-run in ``results/baselines/romen/romen_9x6.csv`` covers all nine
-#: topologies, so it now sits in ``ORDER`` and nothing has to be explained away.
 EXCLUDED: dict[str, tuple[str, ...]] = {}
 
 
 def _exclusion_note(present: Sequence[str]) -> str:
-    """Caption sentence for every baseline deliberately left out of the table.
-
-    Args:
-        present: Strategy names that do appear in the table.
-
-    Returns:
-        LaTeX-safe prose (empty when nothing is excluded), listing each dropped
-        baseline together with the topologies it failed to complete on.
-    """
+    """Caption sentence for every baseline deliberately left out of the table."""
     notes: list[str] = []
     for name, failed in EXCLUDED.items():
         if name in present or not failed:
@@ -83,22 +49,12 @@ def _read(path: Path) -> pd.DataFrame:
     keep = ["dataset", "policy", "attack", "seed", "auc_gcc", "auc_csa", "auc_hc", "r_res"]
     missing = [c for c in keep if c not in frame.columns]
     if missing:
-        raise SystemExit(f"{path} 缺少列 {missing}")
+        raise SystemExit(f"{path} is missing columns {missing}")
     return frame[keep]
 
 
 def _from_records(seeds: int, skip: Sequence[str] = ()) -> pd.DataFrame:
-    """Read the per-evaluation JSON records for the four new attacks.
-
-    ``run_evaluation`` persists one file per cell, so a shard that is killed still
-    leaves its finished cells behind; rebuilding from the records therefore recovers
-    work that the shard CSVs (written once, at the end) would have lost.
-
-    Args:
-        seeds: Number of seeds to keep (rows with a larger seed are dropped).
-        skip: Strategy names to ignore.  Used for ROMEN, whose six columns are read
-            from one dedicated file instead, so that its row comes from a single run.
-    """
+    """Read the per-evaluation JSON records for the four new attacks."""
     import json
 
     rows = []
@@ -125,43 +81,18 @@ def _from_records(seeds: int, skip: Sequence[str] = ()) -> pd.DataFrame:
         })
     frame = pd.DataFrame(rows)
     if frame.empty:
-        raise SystemExit("记录目录里没有找到新攻击的结果")
+        raise SystemExit("no results for the new attacks in the record directory")
     return frame.dropna(subset=["r_res"])
 
 
 def load(seeds: int = 10) -> pd.DataFrame:
-    """Merge the four new attacks with the archived degree/random runs.
-
-    The archived matrix already evaluated degree and random on exactly these nine
-    graphs, twenty seeds and the same strategies, so reusing it keeps the six columns
-    on one protocol and doubles as a consistency check.
-
-    ROMEN is the exception: its archived run stopped at fifteen topologies, and the
-    seed-sharded re-run in ``results/baselines/romen/romen_9x6.csv`` covers all nine graphs
-    for all six attacks.  When that file is present it replaces the archived ROMEN
-    rows entirely.  ROMEN is a torch genetic algorithm that does not guarantee
-    bit-for-bit agreement across processes, so a row mixing archived and fresh cells
-    would average two different constructions; ``merge_romen_sweep.py --compare``
-    quantifies how far apart the two runs actually are.
-
-    Only the eleven strategies of :data:`ORDER` are kept: the 2x2 ablation arms
-    (``degree_ranked``/``ppo``) are evaluated on *both* the original and the
-    reconstructed topology, so they hold two rows per ``(dataset, attack, seed)`` and
-    would break the one-row-per-cell invariant this long table promises.  They belong
-    to the ablation table, not here.
-    """
+    """Merge the four new attacks with the archived degree/random runs."""
     romen_path = ROOT / "results" / "baselines" / "romen" / "romen_9x6.csv"
     romen = pd.DataFrame()
     if romen_path.exists():
         romen = _read(romen_path)
         romen = romen[romen["seed"] < seeds]
 
-    # second generation: the deployed bimodal row is rebuilt at the per-graph interval
-    # rule, so its six columns must all come from the same run.  Mixing a fresh degree
-    # column with archived centrality columns would put two constructions in one row.
-    # the deployed row is BiT-HyRL (the geometric midpoint of the admissible interval),
-    # so its shards live in ``attack_cov_HyRL``; the older ``attack_cov`` directory holds
-    # the BiT-R run and is only a fallback for graphs the new sweep has not reached
     bit = pd.DataFrame()
     for fresh_bit, pattern in ((ROOT / "results" / "attack_cov_HyRL", "BiT-HyRL__*.csv"),
                                (ROOT / "results" / "attack_cov", "BiT-R__*.csv")):
@@ -198,7 +129,7 @@ def load(seeds: int = 10) -> pd.DataFrame:
     frame = frame[frame["policy"].isin(ORDER)]
     duplicated = frame.duplicated(["dataset", "policy", "attack", "seed"]).sum()
     if duplicated:
-        print(f"[warn] 丢弃 {duplicated} 条重复记录")
+        print(f"[warn] dropped {duplicated} duplicate records")
         frame = frame.drop_duplicates(["dataset", "policy", "attack", "seed"])
     return frame
 
@@ -211,8 +142,6 @@ def coverage_table(frame: pd.DataFrame) -> str:
     by_attack["targeted"] = by_attack[list(TARGETED)].mean(axis=1)
 
     present = [name for name in ORDER if name in by_attack.index]
-    # the winner of each column, for bold marking; "targeted" is a column too, and the
-    # caption promises the best entry of *each* column, so it must not be left plain
     columns = list(ATTACKS) + ["targeted"]
     best = by_attack.loc[present, columns].max()
 
@@ -254,41 +183,28 @@ def coverage_table(frame: pd.DataFrame) -> str:
             "\\textbf{Strategy} & \\textbf{Degree} & \\textbf{Betweenness} & \\textbf{Closeness} & "
             "\\textbf{Coreness} & \\textbf{Eigenvector} & \\textbf{Random} & \\textbf{Targeted mean} \\\\\n"
             "\\midrule\n")
-    # a rule between the proposed family and the baselines
     body = body.replace("\nUNITY &", "\n\\midrule\nUNITY &", 1)
     tail = "\n\\bottomrule\n\\end{tabular*}\n\\end{table*}\n"
     return head + body + tail
 
 
 def check_complete(frame: pd.DataFrame, seeds: int) -> pd.Series:
-    """Compare each ``(policy, attack)`` row count with the expected ``9 x seeds``.
-
-    A short cell means a shard died in the middle of a graph (the shard CSV is only
-    written at the very end, the per-cell records are not), so this check is the gate
-    between a finished batch and a table that silently averages fewer graphs.
-
-    Args:
-        frame: The merged long table.
-        seeds: Number of seeds the table is meant to cover.
-
-    Returns:
-        The per-cell row counts, indexed by ``(policy, attack)``.
-    """
+    """Compare each ``(policy, attack)`` row count with the expected ``9 x seeds``."""
     wanted = len(NINE) * seeds
     counts = frame.groupby(["policy", "attack"]).size()
     short = counts[counts != wanted]
     if len(short):
-        print(f"[warn] 以下格子不是 {wanted} 行（9 图 × {seeds} 种子）：")
+        print(f"[warn] these cells do not have {wanted} rows (9 graphs x {seeds} seeds):")
         print(short.to_string())
     else:
-        print(f"[ok] 每格均为 {wanted} 行（9 图 × {seeds} 种子）")
+        print(f"[ok] every cell has {wanted} rows (9 graphs x {seeds} seeds)")
     return counts
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="attack-coverage merge and table")
-    parser.add_argument("--out", default=None, help="paper_tables 目录")
-    parser.add_argument("--seeds", type=int, default=20, help="使用前 k 个种子")
+    parser.add_argument("--out", default=None, help="paper_tables directory")
+    parser.add_argument("--seeds", type=int, default=20, help="use the first k seeds")
     args = parser.parse_args(argv)
 
     frame = load(args.seeds)
@@ -298,7 +214,7 @@ def main(argv=None) -> int:
           f"{frame['attack'].nunique()} attacks, {frame['seed'].nunique()} seeds)")
 
     complete = frame.groupby(["policy", "attack"]).size().unstack()
-    print("\n每格行数（应为 9 图 × 种子数）：")
+    print("\nrows per cell (expected: 9 graphs x seeds):")
     print(complete.to_string())
     check_complete(frame, args.seeds)
 

@@ -1,28 +1,7 @@
-"""Tolerant graph reading, normalisation and fingerprinting.
+"""Reading, normalising and fingerprinting the pinned graphs.
 
-Why this module exists
-----------------------
-``dataset/testdata/Cogentco.gml`` and ``Colt.gml`` contain **duplicate edge
-records**.  ``networkx.read_gml`` (>= 3.x) validates that and dies with
-``NetworkXError: edge #70 (42--143) is duplicated``, so the whole pipeline
-cannot even load two of the nine evaluation graphs.  Worse, a loader that
-silently lets ``nx.Graph`` deduplicate would hide *how many* records were
-dropped, and that count is needed to reconcile the adjacency matrices against
-Table 1 of the paper.
-
-This module therefore parses the GML blocks itself and normalises in a fixed,
-documented order.  The normalisation order is **not** an implementation detail —
-the golden ``(N, M)`` pairs depend on it, so it is frozen here and guarded by a
-synthetic self-loop + parallel-edge fixture in ``tests/test_graph_io.py``:
-
-1. directed → undirected (fold each arc into an unordered pair);
-2. remove parallel edges, keeping the first occurrence;
-3. remove self loops;
-4. drop unused labels and relabel ``0 .. n-1`` in ascending original-label order;
-5. only then compute ``N`` and ``M``.
-
-Step 2 is what turns Cogentco's 245 edge records into ``M = 243`` and Colt's
-191 into ``M = 177``.
+The loader accepts the two GML dialects in ``dataset/testdata`` plus plain edge
+lists, and refuses anything whose fingerprint disagrees with ``configs/graphs.json``.
 """
 
 from __future__ import annotations
@@ -63,17 +42,9 @@ class GraphLoadError(RuntimeError):
 
 
 class GraphSpecMismatch(AssertionError):
-    """Raised when a loaded graph disagrees with its pinned ``(N, M)`` contract.
-
-    This is deliberately *not* swallowed: the numeric contract of the paper is
-    pinned to these values, so a mismatch must stop the run and print the diff
-    rather than let a wrong ``M`` propagate into every downstream table.
-    """
+    """Raised when a loaded graph disagrees with its pinned ``(N, M)`` contract."""
 
 
-# --------------------------------------------------------------------------- #
-# GML scanning
-# --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class GMLNode:
     """One parsed ``node [ ... ]`` block."""
@@ -106,14 +77,7 @@ class RawGraph:
 
 
 def _match_bracket(text: str, start: int) -> int:
-    """Return the index of the ``]`` matching the ``[`` at ``start``.
-
-    Quoted strings are skipped, and a backslash escapes the next character, so a
-    label such as ``"]"`` cannot unbalance the scan.
-
-    Raises:
-        GraphLoadError: If the bracket is never closed.
-    """
+    """Return the index of the ``]`` matching the ``[`` at ``start``."""
     depth = 0
     index = start
     length = len(text)
@@ -137,15 +101,11 @@ def _match_bracket(text: str, start: int) -> int:
             if depth == 0:
                 return index
         index += 1
-    raise GraphLoadError("GML 括号不配对：缺少 ']'")
+    raise GraphLoadError("unbalanced GML block: missing ']'")
 
 
 def _iter_blocks(text: str) -> Iterator[tuple[str, str]]:
-    """Yield ``(keyword, body)`` for every top-level ``keyword [ ... ]`` block.
-
-    ``graph [ ... ]`` blocks are entered recursively, so the ``node`` / ``edge``
-    blocks nested inside them are yielded too.
-    """
+    """Yield ``(keyword, body)`` for every top-level ``keyword [ ... ]`` block."""
     index = 0
     length = len(text)
     while index < length:
@@ -202,12 +162,7 @@ def _unescape(raw: str) -> str:
 
 
 def _tokenize_body(body: str) -> list[tuple[str, str]]:
-    """Split a block body into ``("bare"|"str", value)`` tokens.
-
-    Nested ``[ ... ]`` sub-blocks are skipped wholesale (they are consumed but
-    produce no tokens), so a third-party file that nests attributes cannot be
-    mistaken for a flat key/value list.
-    """
+    """Split a block body into ``("bare"|"str", value)`` tokens."""
     tokens: list[tuple[str, str]] = []
     index = 0
     length = len(body)
@@ -243,12 +198,7 @@ def _tokenize_body(body: str) -> list[tuple[str, str]]:
 
 
 def _parse_attributes(body: str) -> dict[str, Any]:
-    """Parse the ``key value`` attribute pairs of a block body.
-
-    Works on a token stream rather than on physical lines, so a one-line block
-    (``node [ id 0 label "a" ]``) parses exactly like a multi-line one, and a
-    quoted value containing spaces or brackets cannot be split.
-    """
+    """Parse the ``key value`` attribute pairs of a block body."""
     tokens = _tokenize_body(body)
     attributes: dict[str, Any] = {}
     index = 0
@@ -258,7 +208,7 @@ def _parse_attributes(body: str) -> dict[str, Any]:
             index += 1
             continue
         if index + 1 >= len(tokens):
-            attributes[key] = True  # bare flag, e.g. ``Label``
+            attributes[key] = True
             break
         value_kind, value = tokens[index + 1]
         attributes[key] = value if value_kind == "str" else _scalar(value)
@@ -267,30 +217,15 @@ def _parse_attributes(body: str) -> dict[str, Any]:
 
 
 def read_gml_records(path: str | Path) -> RawGraph:
-    """Parse a GML file into raw blocks without any normalisation.
-
-    Args:
-        path: Path to the ``.gml`` file.
-
-    Returns:
-        A :class:`RawGraph` holding every node and edge record verbatim,
-        including duplicates and self loops.
-
-    Raises:
-        GraphLoadError: If the file cannot be read, has no node block, or an
-            edge block lacks ``source`` / ``target``.
-    """
+    """Parse a GML file into raw blocks without any normalisation."""
     source_path = Path(path)
     try:
         text = source_path.read_text(encoding="utf-8", errors="replace")
     except OSError as exc:  # pragma: no cover - filesystem failure
-        raise GraphLoadError(f"无法读取 {source_path}: {exc}") from exc
+        raise GraphLoadError(f"cannot read {source_path}: {exc}") from exc
 
     nodes: list[GMLNode] = []
     edges: list[GMLEdge] = []
-    # Graph-level attributes are not consumed by any code path (only node ids
-    # and edges matter, and the fingerprints are taken over the normalised edge
-    # list), so the field is kept for API completeness and left empty.
     graph_attributes: dict[str, Any] = {}
 
     for keyword, body in _iter_blocks(text):
@@ -298,26 +233,23 @@ def read_gml_records(path: str | Path) -> RawGraph:
         if keyword == "node":
             identifier = attributes.get("id")
             if not isinstance(identifier, int):
-                raise GraphLoadError(f"{source_path}: node 块缺少整数 id（{attributes!r}）")
+                raise GraphLoadError(f"{source_path}: node block without an integer id ({attributes!r})")
             nodes.append(GMLNode(id=identifier, attributes=attributes))
         else:
             source = attributes.get("source")
             target = attributes.get("target")
             if not isinstance(source, int) or not isinstance(target, int):
                 raise GraphLoadError(
-                    f"{source_path}: edge 块缺少整数 source/target（{attributes!r}）"
+                    f"{source_path}: edge block without integer source/target ({attributes!r})"
                 )
             edges.append(GMLEdge(source=source, target=target, attributes=attributes))
 
     if not nodes:
-        raise GraphLoadError(f"{source_path}: 未解析到任何 node 块")
+        raise GraphLoadError(f"{source_path}: no node block was parsed")
 
     return RawGraph(nodes=tuple(nodes), edges=tuple(edges), graph_attributes=graph_attributes)
 
 
-# --------------------------------------------------------------------------- #
-# normalisation
-# --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class NormalizationReport:
     """Counts produced by the normalisation pipeline (for reconciliation)."""
@@ -341,24 +273,7 @@ class NormalizationReport:
 
 def normalize_edges(pairs: Any, *, dedupe: bool = True,
                     drop_self_loops: bool = True) -> tuple[list[tuple[int, int]], int, int]:
-    """Apply steps 1–3 of the normalisation order to raw ``(u, v)`` pairs.
-
-    Order matters and is fixed: fold to undirected → drop parallel edges
-    (keeping the first occurrence) → drop self loops.
-
-    Args:
-        pairs: Iterable of ``(u, v)`` integer pairs, possibly directed, possibly
-            containing duplicates and self loops.
-        dedupe: Whether step 2 runs (``True`` is the contract).
-        drop_self_loops: Whether step 3 runs.
-
-    Returns:
-        ``(edges, duplicates_removed, self_loops_removed)`` where ``edges`` is a
-        list of canonical ``(min, max)`` pairs in first-seen order.
-
-    Raises:
-        GraphLoadError: If a pair is not a 2-tuple of integers.
-    """
+    """Apply steps 1–3 of the normalisation order to raw ``(u, v)`` pairs."""
     seen: set[tuple[int, int]] = set()
     kept: list[tuple[int, int]] = []
     duplicates = 0
@@ -367,9 +282,9 @@ def normalize_edges(pairs: Any, *, dedupe: bool = True,
         try:
             u, v = pair
         except (TypeError, ValueError) as exc:
-            raise GraphLoadError(f"边记录必须是 (u, v) 二元组，收到 {pair!r}") from exc
+            raise GraphLoadError(f"an edge must be a (u, v) pair, got {pair!r}") from exc
         if isinstance(u, bool) or isinstance(v, bool) or not isinstance(u, int) or not isinstance(v, int):
-            raise GraphLoadError(f"边端点必须是整数，收到 {(u, v)!r}")
+            raise GraphLoadError(f"edge endpoints must be integers, got {(u, v)!r}")
         key = (u, v) if u <= v else (v, u)
         if dedupe:
             if key in seen:
@@ -388,27 +303,10 @@ def normalize_edges(pairs: Any, *, dedupe: bool = True,
 def load_graph_with_meta(path: str | Path, *, dedupe: bool = True,
                          drop_self_loops: bool = True,
                          relabel: bool = True) -> tuple[nx.Graph, dict[str, Any]]:
-    """Load a graph and return it together with its provenance metadata.
-
-    Args:
-        path: Input file. ``.gml`` uses the tolerant reader; ``.graphml`` and
-            ``.edgelist`` / ``.txt`` fall back to networkx readers, then go
-            through the same normalisation.
-        dedupe: Drop parallel edges (must stay ``True`` for the pinned values).
-        drop_self_loops: Drop self loops.
-        relabel: Relabel to ``0 .. n-1`` in ascending original-label order.
-
-    Returns:
-        ``(graph, meta)``. ``meta`` carries ``raw_edge_records``,
-        ``duplicates_removed``, ``self_loops_removed``, ``n``, ``m`` and the
-        source ``path``.
-
-    Raises:
-        GraphLoadError: On unreadable files or malformed records.
-    """
+    """Load a graph and return it together with its provenance metadata."""
     source_path = Path(path)
     if not source_path.is_file():
-        raise GraphLoadError(f"图文件不存在: {source_path}")
+        raise GraphLoadError(f"graph file not found: {source_path}")
     suffix = source_path.suffix.lower()
 
     if suffix == ".gml":
@@ -420,7 +318,7 @@ def load_graph_with_meta(path: str | Path, *, dedupe: bool = True,
         try:
             loaded = nx.read_graphml(source_path)
         except Exception as exc:
-            raise GraphLoadError(f"无法解析 {source_path}: {exc}") from exc
+            raise GraphLoadError(f"cannot parse {source_path}: {exc}") from exc
         node_ids = list(loaded.nodes())
         pairs = list(loaded.edges())
         raw_edge_records = len(pairs)
@@ -428,7 +326,7 @@ def load_graph_with_meta(path: str | Path, *, dedupe: bool = True,
         try:
             handle = source_path.open("r", encoding="utf-8")
         except OSError as exc:  # pragma: no cover
-            raise GraphLoadError(f"无法读取 {source_path}: {exc}") from exc
+            raise GraphLoadError(f"cannot read {source_path}: {exc}") from exc
         with handle:
             node_ids = []
             pairs = []
@@ -438,24 +336,23 @@ def load_graph_with_meta(path: str | Path, *, dedupe: bool = True,
                     continue
                 parts = line.split()
                 if len(parts) < 2:
-                    raise GraphLoadError(f"{source_path}: 边行至少需要两个端点，收到 {line!r}")
+                    raise GraphLoadError(f"{source_path}: an edge line needs two endpoints, got {line!r}")
                 try:
                     u, v = int(parts[0]), int(parts[1])
                 except ValueError as exc:
                     raise GraphLoadError(
-                        f"{source_path}: 边端点必须是整数，收到 {line!r}"
+                        f"{source_path}: edge endpoints must be integers, got {line!r}"
                     ) from exc
                 node_ids.extend((u, v))
                 pairs.append((u, v))
         raw_edge_records = len(pairs)
     else:
-        raise GraphLoadError(f"不支持的图格式 {suffix!r}（支持 .gml/.graphml/.edgelist）")
+        raise GraphLoadError(f"unsupported graph format {suffix!r} (expected .gml, .graphml or .edgelist)")
 
     edges, duplicates, loops = normalize_edges(
         pairs, dedupe=dedupe, drop_self_loops=drop_self_loops
     )
 
-    # Step 4: stable relabelling in ascending original-label order.
     all_ids = set(int(node) for node in node_ids)
     for u, v in edges:
         all_ids.add(u)
@@ -488,27 +385,15 @@ def load_graph_with_meta(path: str | Path, *, dedupe: bool = True,
 
 def load_graph(path: str | Path, *, dedupe: bool = True, drop_self_loops: bool = True,
                relabel: bool = True) -> nx.Graph:
-    """Load a graph with the tolerant normalisation pipeline.
-
-    See :func:`load_graph_with_meta` for the semantics of the flags.
-    """
+    """Load a graph with the tolerant normalisation pipeline."""
     graph, _ = load_graph_with_meta(
         path, dedupe=dedupe, drop_self_loops=drop_self_loops, relabel=relabel
     )
     return graph
 
 
-# --------------------------------------------------------------------------- #
-# fingerprints
-# --------------------------------------------------------------------------- #
 def edge_list_sha256(graph: nx.Graph) -> str:
-    """SHA-256 over the sorted canonical edge list of ``graph``.
-
-    ``N`` is part of the payload so that isolated nodes are visible in the hash;
-    everything else about the graph (labels, attributes) is deliberately not,
-    which makes the fingerprint invariant under relabelling and idempotent under
-    re-normalisation.
-    """
+    """SHA-256 over the sorted canonical edge list of ``graph``."""
     canonical = sorted(
         (u, v) if u <= v else (v, u) for u, v in graph.edges()
     )
@@ -520,23 +405,7 @@ def graph_fingerprint(graph: nx.Graph, *, path: str | Path | None = None,
                       duplicates_removed: int | None = None,
                       raw_edge_records: int | None = None,
                       self_loops_removed: int | None = None) -> dict[str, Any]:
-    """Build the fingerprint record of ``graph``.
-
-    The fingerprint is stable and idempotent: loading the same file twice, or
-    fingerprinting the same in-memory graph twice, yields the same ``sha256``.
-
-    Args:
-        graph: Simple undirected graph.
-        path: Optional source path; defaults to the metadata stashed by the
-            loader.
-        duplicates_removed: Override for the loader-provided count.
-        raw_edge_records: Override for the loader-provided count.
-        self_loops_removed: Override for the loader-provided count.
-
-    Returns:
-        ``{"n", "m", "sha256", "path", "duplicates_removed",
-        "raw_edge_records", "self_loops_removed"}``.
-    """
+    """Build the fingerprint record of ``graph``."""
     meta = graph.graph.get(META_KEY, {}) if hasattr(graph, "graph") else {}
     resolved_path = path if path is not None else meta.get("path")
     return {
@@ -560,23 +429,9 @@ def graph_fingerprint(graph: nx.Graph, *, path: str | Path | None = None,
 
 
 def load_graph_spec(spec: Mapping[str, Any]) -> tuple[nx.Graph, dict[str, Any]]:
-    """Load a graph from a ``configs/graphs.json``-style spec and verify it.
-
-    Args:
-        spec: Mapping with at least ``path``; optionally ``dataset``, ``n``,
-            ``m``, ``duplicates_removed`` and ``sha256`` as pinned expectations.
-
-    Returns:
-        ``(graph, fingerprint)``.
-
-    Raises:
-        GraphSpecMismatch: If any pinned expectation is violated. The message
-            spells out the expected and observed values so the diff is visible
-            without a debugger.
-        GraphLoadError: If the file cannot be parsed.
-    """
+    """Load a graph from a ``configs/graphs.json``-style spec and verify it."""
     if "path" not in spec:
-        raise GraphLoadError(f"graph spec 缺少 'path': {spec!r}")
+        raise GraphLoadError(f"graph spec without 'path': {spec!r}")
     graph = load_graph(spec["path"])
     fingerprint = graph_fingerprint(graph, path=spec["path"])
     name = spec.get("dataset") or spec.get("name") or Path(str(spec["path"])).stem
@@ -585,14 +440,14 @@ def load_graph_spec(spec: Mapping[str, Any]) -> tuple[nx.Graph, dict[str, Any]]:
     for key in ("n", "m", "duplicates_removed", "raw_edge_records"):
         if key in spec and spec[key] is not None and int(spec[key]) != int(fingerprint[key]):
             mismatches.append(
-                f"{key}: 期望 {spec[key]}，实测 {fingerprint[key]}（差 {int(fingerprint[key]) - int(spec[key])}）"
+                f"{key}: expected {spec[key]}, measured {fingerprint[key]} (diff {int(fingerprint[key]) - int(spec[key])})"
             )
     if "sha256" in spec and spec["sha256"] and str(spec["sha256"]) != fingerprint["sha256"]:
         mismatches.append(
-            f"sha256: 期望 {spec['sha256']}，实测 {fingerprint['sha256']}"
+            f"sha256: expected {spec['sha256']}, measured {fingerprint['sha256']}"
         )
     if mismatches:
         raise GraphSpecMismatch(
-            f"{name} 与金标准不符：" + "；".join(mismatches)
+            f"{name} does not match the pinned fingerprint: " + "; ".join(mismatches)
         )
     return graph, fingerprint

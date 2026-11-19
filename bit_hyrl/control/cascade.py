@@ -1,43 +1,7 @@
-"""Cascading-failure engine: ``structural`` (default) and ``capacity``.
+"""Cascading-failure engine with ``structural`` and ``capacity`` modes.
 
-Two modes, one loop, and the difference is *only* what happens after a node dies:
-
-``structural`` — the published protocol
-    Delete the attacked node.  Then delete, **as a whole block**, every connected
-    component of the surviving subgraph that contains no surviving controller.
-    Nothing is re-assigned and capacity is never consulted.  This is the semantics
-    the already-published numbers were produced under, so it stays the default and
-    is not allowed to drift.
-
-``capacity`` — opt-in, off by default
-    Delete the attacked node, then iterate to a fixed point:
-
-    1. recompute ``L_j`` from the current assignment;
-    2. find the overdrawn controllers (``L_j > C``);
-    3. hand their surplus to :func:`~bit_hyrl.control.assignment.reassign_excess`,
-       which moves each surplus node to the nearest controller with room;
-    4. nodes with nowhere to go fail (they leave the alive set);
-    5. delete controller-less components again;
-    6. repeat, up to ``max_iter``.
-
-    Because step 1 uses the *capacity-blind* nearest assignment as the starting
-    point, overload is a real event rather than a tautology; and because the loop
-    is bounded, ``max_iter = 1`` leaves the trace visibly non-converged
-    (``CascadeStep.converged = False``), which
-    ``tests/test_cascade_capacity.py`` asserts directly.
-
-The audit identity
-------------------
-Every step carries counts that must satisfy
-
-.. code-block:: text
-
-    direct_removed + cascade_removed + alive == N
-
-and :func:`run_cascade` re-checks it *after every step*, not just at the end.
-That is what makes "``f_total`` went up" attributable: a rise in ``f_total`` that
-is not explained by ``f_direct`` must come from ``cascade_removed``, and the two
-can never disagree silently.
+Both modes share one loop; they differ only in what happens after a node is
+removed.
 """
 
 from __future__ import annotations
@@ -69,16 +33,7 @@ class CascadeError(RuntimeError):
 
 
 def surviving_components(graph: nx.Graph, alive: Iterable[int]) -> list[set[int]]:
-    """Return the connected components of the subgraph induced by ``alive``.
-
-    Args:
-        graph: The full graph.
-        alive: Surviving node ids.
-
-    Returns:
-        Components as sets, ordered by their smallest node id so the result is
-        independent of iteration order.
-    """
+    """Return the connected components of the subgraph induced by ``alive``."""
     alive_set = {int(node) for node in alive}
     subgraph = graph.subgraph(alive_set)
     components = [set(component) for component in nx.connected_components(subgraph)]
@@ -88,23 +43,7 @@ def surviving_components(graph: nx.Graph, alive: Iterable[int]) -> list[set[int]
 
 def recompute_loads(owner: dict[int, int], controllers_alive: Iterable[int],
                     alive: Iterable[int], demand: int = 1) -> dict[int, int]:
-    """Return ``{controller: L_j}`` for the surviving assignment.
-
-    A switch contributes to ``L_j`` only if it is alive **and** its owner is
-    alive; a switch whose owner died is simply not counted (it is picked up by
-    the re-assignment step of the capacity mode, or by the controller-less
-    component removal of the structural mode).
-
-    Args:
-        owner: ``switch -> controller`` map.
-        controllers_alive: Surviving controller ids.
-        alive: Surviving node ids.
-        demand: Per-switch demand.
-
-    Returns:
-        A dict with an entry for **every** surviving controller, zeros included,
-        so callers never have to guard against missing keys.
-    """
+    """Return ``{controller: L_j}`` for the surviving assignment."""
     alive_set = {int(node) for node in alive}
     survivors = sorted({int(c) for c in controllers_alive})
     loads = {controller: 0 for controller in survivors}
@@ -117,29 +56,7 @@ def recompute_loads(owner: dict[int, int], controllers_alive: Iterable[int],
 
 @dataclass(frozen=True)
 class CascadeStep:
-    """One emitted state of a cascade.
-
-    Attributes:
-        step: Zero-based index into :attr:`CascadeTrace.direct_sequence`.  A step
-            is emitted for **every** entry of the attack sequence, including the
-            ones that turn out to be already dead, so ``len(steps)`` always equals
-            ``len(direct_sequence)`` and ``r_curve``/``f_grid`` can be interpolated
-            without guessing.
-        f_direct: Cumulative directly-attacked fraction, ``direct_removed / N``.
-        f_total: Cumulative failed fraction, ``1 - |alive| / N``.
-        alive_nodes: Surviving node ids, ascending.
-        controllers_alive: Surviving controller ids, ascending.
-        loads: ``{controller: L_j}`` for the surviving controllers.
-        max_utilisation: ``max_j L_j / C`` (``0.0`` when no controller survives).
-        reassigned: Nodes moved by :func:`reassign_excess` during this step.
-        removed_components: Components deleted as a block during this step.
-        gcc_size: Size of the largest surviving component.
-        converged: ``capacity`` mode only — ``True`` when the fixed-point loop
-            exited because nothing was overloaded, ``False`` when it hit
-            ``max_iter``.  Always ``True`` in ``structural`` mode.
-        iterations: Fixed-point iterations consumed by this step (``0`` in
-            ``structural`` mode).
-    """
+    """One emitted state of a cascade."""
 
     step: int
     f_direct: float
@@ -155,15 +72,7 @@ class CascadeStep:
     iterations: int = 0
 
     def to_dict(self, *, with_nodes: bool = False) -> dict[str, Any]:
-        """Plain-``dict`` view.
-
-        Args:
-            with_nodes: Include the full surviving node list.  Off by default so
-                a 500-step trace stays readable.
-
-        Returns:
-            A JSON-ready dict.
-        """
+        """Plain-``dict`` view."""
         payload: dict[str, Any] = {
             "step": self.step,
             "f_direct": self.f_direct,
@@ -185,20 +94,7 @@ class CascadeStep:
 
 @dataclass(frozen=True)
 class CascadeTrace:
-    """A full cascade run.
-
-    Attributes:
-        mode: ``"structural"`` or ``"capacity"``.
-        direct_sequence: The attack sequence actually consumed (as given).
-        steps: One :class:`CascadeStep` per attack-sequence entry.
-        iterations_per_step: Fixed-point iterations per step (all zero in
-            ``structural`` mode).
-        final_fraction: ``f_total`` of the last step (``0.0`` for an empty
-            sequence).
-        n_nodes: ``N`` of the graph the cascade ran on.
-        n_controllers: Initial controller count.
-        audit_ok: Whether ``direct + cascade + alive == N`` held at every step.
-    """
+    """A full cascade run."""
 
     mode: str
     direct_sequence: tuple[int, ...]
@@ -238,27 +134,7 @@ class CascadeTrace:
 def run_cascade(graph: nx.Graph, attack_sequence: Sequence[int],
                 controllers: Sequence[int], model: CapacityModel,
                 cfg: Any = None) -> CascadeTrace:
-    """Run the attack sequence and return the full trace.
-
-    Args:
-        graph: The evaluated graph (node ids ``0 .. n-1``).
-        attack_sequence: Node ids in attack order.  Entries that are already dead
-            are consumed but change nothing (``f`` stays monotone by
-            construction).
-        controllers: Initial controller ids.
-        model: Solved :class:`CapacityModel`; ``capacity`` is used *only* in
-            ``capacity`` mode.
-        cfg: A ``CascadeConfig``-like object with ``mode`` (default
-            ``"structural"``), ``max_iter`` (default 50) and ``reassign_policy``
-            (default ``"nearest_with_capacity"``), or ``None`` for defaults.
-
-    Returns:
-        A :class:`CascadeTrace`.
-
-    Raises:
-        CascadeError: If ``mode`` is unknown, if a controller or attack node is
-            not a node of ``graph``, or if the audit identity fails at any step.
-    """
+    """Run the attack sequence and return the full trace."""
     mode = str(getattr(cfg, "mode", "structural")) if cfg is not None else "structural"
     max_iter = int(getattr(cfg, "max_iter", 50)) if cfg is not None else 50
     policy = (
@@ -266,13 +142,13 @@ def run_cascade(graph: nx.Graph, attack_sequence: Sequence[int],
         if cfg is not None else "nearest_with_capacity"
     )
     if mode not in CASCADE_MODES:
-        raise CascadeError(f"未知级联模式 {mode!r}，支持 {list(CASCADE_MODES)}")
+        raise CascadeError(f"unknown cascade mode {mode!r}, expected one of {list(CASCADE_MODES)}")
     if policy != "nearest_with_capacity":
         raise CascadeError(
-            f"未知 reassign_policy {policy!r}（当前仅支持 'nearest_with_capacity'）"
+            f"unknown reassign_policy {policy!r} (only 'nearest_with_capacity' is supported)"
         )
     if max_iter < 1:
-        raise CascadeError(f"max_iter 必须 >= 1，收到 {max_iter}")
+        raise CascadeError(f"max_iter must be >= 1, got {max_iter}")
 
     nodes = sorted(int(node) for node in graph.nodes())
     node_set = set(nodes)
@@ -280,14 +156,11 @@ def run_cascade(graph: nx.Graph, attack_sequence: Sequence[int],
     initial_controllers = sorted({int(c) for c in controllers})
     unknown = [node for node in initial_controllers if node not in node_set]
     if unknown:
-        raise CascadeError(f"控制器 {unknown} 不在图里（n={n}）")
+        raise CascadeError(f"controller {unknown} is not in the graph (n={n})")
 
     alive: set[int] = set(nodes)
     controllers_alive: set[int] = set(initial_controllers)
 
-    # Capacity mode starts from the capacity-blind nearest assignment, so that an
-    # overload is a measurable event; structural mode keeps a fixed assignment
-    # purely for the load bookkeeping reported in each step.
     if n - len(initial_controllers) > 0:
         owner: dict[int, int] = assign_single_controller(
             graph, initial_controllers, model, enforce_capacity=False
@@ -304,7 +177,7 @@ def run_cascade(graph: nx.Graph, attack_sequence: Sequence[int],
     for index, raw_node in enumerate(attack_sequence):
         node = int(raw_node)
         if node not in node_set:
-            raise CascadeError(f"攻击序列含图外节点 {node}（n={n}）")
+            raise CascadeError(f"attack sequence contains node {node}, outside the graph (n={n})")
 
         reassigned_this_step = 0
         removed_components: list[tuple[int, ...]] = []
@@ -317,14 +190,12 @@ def run_cascade(graph: nx.Graph, attack_sequence: Sequence[int],
             controllers_alive.discard(node)
             owner.pop(node, None)
 
-            # ---- structural mode: remove controller-less components as blocks - #
             if mode == "structural":
                 for component in surviving_components(graph, alive):
                     if component.isdisjoint(controllers_alive):
                         alive -= component
                         cascade_removed += len(component)
                         removed_components.append(tuple(sorted(component)))
-            # ---- capacity mode: overload -> reassign -> remove -> repeat ------ #
             else:
                 assignment = Assignment(
                     owner=dict(owner),
@@ -339,7 +210,6 @@ def run_cascade(graph: nx.Graph, attack_sequence: Sequence[int],
                 while True:
                     iterations += 1
                     if not controllers_alive:
-                        # Every controller is gone: everything left fails at once.
                         cascade_removed += len(alive)
                         removed_components.append(tuple(sorted(alive)))
                         alive.clear()
@@ -352,14 +222,6 @@ def run_cascade(graph: nx.Graph, attack_sequence: Sequence[int],
                         controller for controller in sorted(loads)
                         if loads[controller] > model.capacity
                     ]
-                    # Orphaned switches matter as much as overdrawn controllers.
-                    # A node whose controller died is *not* counted in ``loads`` at
-                    # all, so an overload test alone declares "converged" while the
-                    # component is genuinely over capacity: e.g. 5 surviving
-                    # controllers with C = 15 serve 75 switches, but 90 switches are
-                    # alive because 45 of them still point at dead controllers.  A
-                    # stale ``owner`` entry is as orphaned as a missing one, so both
-                    # are fed back into the assignment.
                     orphaned = tuple(
                         sorted(
                             node for node in alive
@@ -403,7 +265,6 @@ def run_cascade(graph: nx.Graph, attack_sequence: Sequence[int],
                         converged = True
                         break
 
-        # ---- bookkeeping and the audit identity --------------------------- #
         loads = recompute_loads(owner, controllers_alive, alive, demand=model.demand)
         max_utilisation = (
             max((load / model.capacity) for load in loads.values())
@@ -415,7 +276,7 @@ def run_cascade(graph: nx.Graph, attack_sequence: Sequence[int],
         if direct_removed + cascade_removed + len(alive) != n:
             audit_ok = False
             raise CascadeError(
-                "审计恒等式被破坏："
+                "audit identity violated: "
                 f"direct={direct_removed} + cascade={cascade_removed} + alive={len(alive)} "
                 f"!= N={n}（step {index}）"
             )

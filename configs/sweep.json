@@ -1,8 +1,21 @@
 {
-  "_comment": "c 敏感性扫描的默认网格。c 是 BiT 层唯一的形状参数：c→1 度均衡，c 大则趋近单 super-hub。c>=20 时 k_max 撞 N-1 上限（capped），c=1.0 在低平均度图上退化（degenerate），两者都在行内显式标记，不静默改参数。",
+  "_comment": "Default grid of the c sweep. c is the only shape parameter of the BiT layer: towards c = 1 the degrees equalise, large c approaches a single super-hub. Above c = 20 k_max hits the N-1 ceiling and c = 1.0 degenerates on low-mean-degree graphs; both cases are marked in the row rather than silently clipped.",
   "schema_version": "bit_hyrl/sweep/1.0",
-  "c_grid": [1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 3, 4, 6, 10, 20, 50],
+  "c_grid": [
+    1.0,
+    1.2,
+    1.4,
+    1.6,
+    1.8,
+    2.0,
+    3,
+    4,
+    6,
+    10,
+    20,
+    50
+  ],
   "h": 1,
   "seed": 0,
-  "note": "1.6 为主方案；1.0/1.2 用于观察下界退化；20/50 用于观察上界截断。"
+  "note": "1.6 is the deployed value; 1.0 and 1.2 show the lower-bound degeneracy; 20 and 50 show the upper-end truncation."
 }

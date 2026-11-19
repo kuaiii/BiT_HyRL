@@ -124,11 +124,7 @@ def _collective_influence_l(network: Graph, l, stop_condition, **kwargs):
 
 
 method_info = {
-    # "name": "Collective Influence",
-    # "short_name": "CI",
     "source": "https://github.com/makselab/Collective-Influence",
-    # "authors": "",
-    # "citation": "",
     "includes_reinsertion": True,
 }
 

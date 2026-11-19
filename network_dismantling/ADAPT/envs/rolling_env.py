@@ -82,9 +82,6 @@ class RollingDismantleEnv:
         self.done: bool = False
         self.last_obs: Optional[Dict[str, Any]] = None
 
-    # -----------------------------------------------------------------------
-    # Helpers
-    # -----------------------------------------------------------------------
     def _gcc_size(self, G: nx.Graph) -> int:
         if G.number_of_nodes() == 0:
             return 0
@@ -141,17 +138,12 @@ class RollingDismantleEnv:
 
         return r_terminal
 
-    # -----------------------------------------------------------------------
-    # Observation building on visible subgraph
-    # -----------------------------------------------------------------------
     def _build_obs(self) -> Dict[str, Any]:
         alive_visible = [v for v in self.visible_nodes if not self.removed_mask[v].item()]
         m = len(alive_visible)
         if m == 0:
             return self._empty_obs()
 
-        # Build edge_index on alive_visible subgraph
-        # We use the original G_nx (which is never modified) but filter edges
         edge_list = []
         alive_set = set(alive_visible)
         for u, v in self.G_nx.edges():
@@ -286,9 +278,6 @@ class RollingDismantleEnv:
 
         return x
 
-    # -----------------------------------------------------------------------
-    # Gym-like interface
-    # -----------------------------------------------------------------------
     def reset(self, G: nx.Graph, agent_node: Optional[int] = None) -> Dict[str, Any]:
         # Relabel nodes to contiguous 0..n-1
         if G.number_of_nodes() > 0:
@@ -408,15 +397,6 @@ class RollingDismantleEnv:
             **self.dynamics_kwargs,
         )
 
-        # Note: dynamics may change node IDs/edges, but we keep original G_nx intact
-        # For simplicity with rolling window, we sync G_nx with dynamics result
-        # This means we need to rebuild the full graph after dynamics
-        # However, this is tricky because removed nodes should stay removed.
-        # Simplification: for rolling env, we apply dynamics only on alive nodes,
-        # then merge back.
-        # Actually, let's follow the original env's approach: G_nx IS the working graph.
-        # But in rolling mode, we need G_nx to stay intact for visibility expansion.
-        # Compromise: update G_nx edges based on dynamics, but keep all nodes.
         self._sync_graph_after_dynamics(G_next)
 
         # If agent_node was removed, pick a new reference from visible nodes

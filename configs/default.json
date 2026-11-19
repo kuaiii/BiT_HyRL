@@ -1,5 +1,5 @@
 {
-  "_comment": "BiT-HyRL 全局默认配置（唯一真值源）。JSON 而非 YAML：运行环境无 pyyaml（DESIGN F3）。",
+  "_comment": "Global default configuration. JSON rather than YAML because the runtime does not require pyyaml.",
   "cascade": {
     "max_iter": 50,
     "mode": "structural",

@@ -84,8 +84,6 @@ def get_predictions(network, sorting_function, *args, logger=logging.getLogger('
 
         logger.info("Heuristics returned. Took {}".format(timedelta(seconds=(time_spent))))
 
-    # pairs = list(zip([network.vertex_properties["static_id"][v] for v in network.vertices()], values))
-    # return pairs, time_spent
     return values, time_spent
 
 
@@ -116,10 +114,6 @@ def main(args):
                                          # manager=mp_manager,
                                          )
 
-    # networks_provider = init_network_provider(args.location,
-    #                                           max_num_vertices=args.max_num_vertices,
-    #                                           filter=args.test_filter,
-    #                                           )
 
     if args.input is not None:
         # df = pd.read_csv(args.output_file)
@@ -163,19 +157,12 @@ def main(args):
                 position=1,
                 desc="Heuristics",
         ):
-            # for heuristic in progressbar(
-            #         # list(product_dict(_callback=sorter.parameters_combination_validator, **parameters_to_try)),
-            #         args.heuristics,
-            #         redirect_stdout=True
-            # ):
             display_name = ' '.join(heuristic.split("_")).upper()
 
             # TODO improve me
             filter = {
                 "heuristic": heuristic
             }
-            # add_run_parameters(params, filter)
-            # sorter.add_run_parameters(filter)
 
             df_filtered = network_df.loc[
                 (network_df[list(filter.keys())] == list(filter.values())).all(axis='columns'),
@@ -187,11 +174,6 @@ def main(args):
                 "logger": print,
                 "network_name": name,
             }
-            # for name, network in tqdm(networks_provider,
-            #                           desc="Networks",
-            #                           position=1,
-            #                           ascii=True,
-            #                           ):
 
             runs = []
             for mode in static_modes:
@@ -202,13 +184,9 @@ def main(args):
                     continue
 
                 if mode:
-                    # External (fast) C++ dismantler.
-                    # WARNING: It won't work if you try to remove nodes that only have self loops in the original network.
                     generator = get_predictions
                     dismantler = external_threshold_dismantler
 
-                    # generator = static_generator
-                    # dismantler = threshold_dismantler
                 else:
                     # TODO REMOVE THIS. IT'S ONLY FOR DEBUGGING
                     if "collective_influence" in heuristic:
@@ -393,15 +371,6 @@ if __name__ == "__main__":
         if args.output not in args.input:
             args.input.append(args.output)
 
-    # else:
-    #
-    #     if not args.input.is_absolute():
-    #         args.input = args.input.resolve()
-    #
-    #     if not args.input.exists():
-    #         raise FileNotFoundError("Input file {} does not exist.".format(args.input))
-    #     elif not args.input.is_file():
-    #         raise FileNotFoundError("Input file {} is not a file.".format(args.input))
 
     if not args.output_file.parent.exists():
         args.output_file.parent.mkdir(parents=True)

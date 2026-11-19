@@ -1,25 +1,4 @@
-"""Control plane: capacity model, single-valued assignment, cascade engine.
-
-Deliberately ignorant of *how* the topology was produced and of the RL layer: it
-takes an :class:`networkx.Graph` plus a controller list, and returns a
-:class:`~bit_hyrl.control.cascade.CascadeTrace`.  That is what makes the
-``structural`` mode reproducible against the already-published results and the
-``capacity`` mode an honest opt-in extension rather than a redefinition.
-
-Four modules, one direction of dependency:
-
-* :mod:`.capacity` — the ``(n_c, C)`` budget, the per-component feasibility audit
-  and the utilisation probe (``u_nearest`` / ``u_after_spill`` / ``feasible``);
-* :mod:`.assignment` — the single-valued, minimal-deviation switch → controller
-  map (nearest first, spill only when capacity forces it, **never** balancing);
-* :mod:`.cascade` — the two cascade semantics on one loop;
-* :mod:`.feasibility` — the capacity verdict as a function of the removal
-  fraction, which is the evidence the analysis actually needs.
-
-Layer rule: ``control`` may import :mod:`bit_hyrl.topology`'s
-pure helpers (e.g. ``round_half_up``) but never ``rl``, and ``topology`` never
-imports ``control``.
-"""
+"""Control plane: capacity model, controller assignment and cascade engine."""
 
 from __future__ import annotations
 

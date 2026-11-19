@@ -1,17 +1,9 @@
-"""BiT-HyRL — a clean-room rebuild of the bimodal-topology + RL pipeline.
+"""BiT-HyRL: bimodal topology construction, controller placement and resilience
+evaluation.
 
-Three layers, no shortcuts between them:
-
-* **BiT** (:mod:`bit_hyrl.topology`) turns ``(N, M, c, h, seed)`` into a graph
-  plus a plan plus diagnostics.  Standalone: ``python -m bit_hyrl construct``.
-* **Hy** (:mod:`bit_hyrl.hybrid`) is编排 only — it composes BiT with a policy.
-* **RL** (:mod:`bit_hyrl.rl`) places controllers; it never learns how the
-  topology was produced.
-
-This package intentionally has **zero imports** from the legacy ``src/``,
-``network_construction/`` and ``network_metrics/`` trees.  The only permitted
-reuse of legacy code is a lazily-bridged, read-only call into
-``network_dismantling/`` for the Tier-B attacks.
+Subpackages: ``topology`` (BiT), ``control`` (capacity, assignment, cascade),
+``rl`` (PPO placement), ``evaluation`` (metrics, runner) and ``analysis``
+(tables, statistics, figures).
 """
 
 from __future__ import annotations

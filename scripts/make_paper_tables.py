@@ -1,24 +1,4 @@
-"""Generate the manuscript's LaTeX tables directly from the result files.
-
-The manuscript tables were produced by an older pipeline; the numbers no longer describe
-the code that is in the repository.  This script rebuilds them from the archive so that
-every cell in the paper is reproducible by one command.
-
-Design notes
-------------
-* Each table is written as a standalone ``.tex`` fragment under ``paper_tables/`` so the
-  manuscript can ``\\input`` it, and the diff is reviewable without touching prose.
-* A cell is the mean over **both attack modes and all seeds**, with the sample standard
-  deviation over seeds.  The manuscript describes a balanced paradigm
-  (``R = 0.5 R_targeted + 0.5 R_random``), so averaging the two attacks is what the text
-  promises; averaging over seeds first and then reporting their sd keeps the spread
-  attributable to the attack order, not to the mixing.
-* A method that did not run on a graph prints ``--`` and is listed in the footer.  Nothing
-  is imputed: an empty cell is a fact about the experiment, a filled one would be a lie.
-
-Usage:
-    python scripts/make_paper_tables.py --out "../../02-第二次投稿 RESS/rebuttal/paper_tables"
-"""
+"""Generate the LaTeX tables from the result files."""
 
 from __future__ import annotations
 
@@ -33,12 +13,7 @@ import numpy as np
 from scipy.stats import spearmanr, t as student_t, wilcoxon
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-#: Single results root.  Everything the manuscript prints is read from ``results``;
-#: the earlier archive is no longer referenced by any builder (see ``results/README.md``).
 RESULTS = REPO_ROOT / "results"
-#: Records that did not need a re-run.  The external baselines, the ROMEN re-run, the
-#: weight sweep and the runtime benchmark were measured once and are archived here
-#: verbatim, so that the whole manuscript has one provenance path.
 BASELINES = RESULTS / "baselines"
 CURVE_COLUMNS = ("f_grid", "r_curve", "csa_curve", "hc_curve")
 
@@ -46,23 +21,11 @@ CURVE_COLUMNS = ("f_grid", "r_curve", "csa_curve", "hc_curve")
 NINE = ("BA-100", "BA-200", "BA-300", "BA-400", "BA-500",
         "GtsCe", "UsCarrier", "Colt", "Cogentco")
 
-#: the seed-sharded ROMEN re-run.  It covers the nine graphs of Table 5 for all six
-#: attacks, so it supersedes the archived ROMEN rows wherever the two overlap.  It is
-#: read *first* everywhere and the de-duplication below keeps the first occurrence,
-#: which is what makes the substitution automatic.
 ROMEN_RERUN = BASELINES / "romen" / "romen_9x6.csv"
 
 
 def _romen_rerun() -> pd.DataFrame | None:
-    """Return the two-mode slice of the ROMEN re-run, or ``None`` if it is absent.
-
-    The re-run holds all six attacks, because the attack-coverage table needs them.
-    Every table built here uses the balanced two-mode protocol of the manuscript
-    (``degree`` + ``random``, 40 runs per cell), so the other four columns must be
-    dropped: keeping them would average ROMEN over 120 runs per cell while every
-    other row is averaged over 40, and the comparison would no longer be
-    like-for-like.
-    """
+    """Return the two-mode slice of the ROMEN re-run, or ``None`` if it is absent."""
     if not ROMEN_RERUN.exists():
         return None
     frame = pd.read_csv(ROMEN_RERUN)
@@ -70,12 +33,7 @@ def _romen_rerun() -> pd.DataFrame | None:
 
 
 def _paired_frame() -> pd.DataFrame:
-    """Seed-level records with the ablation arms merged in, one row per run.
-
-    The ablation arms live in a separate file; the methods that appear in both are
-    de-duplicated on (dataset, policy, attack, seed) so that no configuration is
-    counted twice.
-    """
+    """Seed-level records with the ablation arms merged in, one row per run."""
     pieces = []
     rerun = _romen_rerun()
     if rerun is not None:
@@ -121,10 +79,6 @@ def load() -> pd.DataFrame:
     return frame.drop_duplicates(subset=["dataset", "policy", "attack", "seed"], keep="first")
 
 
-
-#: policy name in the archive -> row label printed in the manuscript.  The ``-sim``
-#: suffix marks the simulator stand-in in the code, but it means nothing to a reader of
-#: the paper and it makes the baseline look like a variant of itself.
 DISPLAY = {"MWCL-sim": "MWCL", "MADQN-sim": "MADQN"}
 
 
@@ -144,7 +98,6 @@ def table_comprehensive(frame: pd.DataFrame) -> tuple[str, list[str]]:
         body.append(f"\\midrule\n\\multicolumn{{10}}{{c}}{{\\textbf{{{metric_label} Metric}}}} \\\\")
         body.append("\\midrule")
 
-        # per (graph, policy) mean over seeds, averaged over the two attacks
         per_seed = (frame.groupby(["dataset", "policy", "attack", "seed"])[column].mean()
                     .reset_index())
         stats = (per_seed.groupby(["dataset", "policy"])[column]
@@ -153,8 +106,6 @@ def table_comprehensive(frame: pd.DataFrame) -> tuple[str, list[str]]:
         table = stats.pivot(index="policy", columns="dataset", values="mean")
         spread = stats.pivot(index="policy", columns="dataset", values="std")
 
-        # rank only among the rows the manuscript actually prints -- an unlisted policy
-        # (e.g. MADQN-sim) must not steal the bold marker from a listed one
         shown = [policy for _, policy in ROWS if policy in table.index]
         ranked = table.loc[shown]
 
@@ -237,26 +188,7 @@ def table_datasets() -> str:
 
 
 def table_ablation(frame: pd.DataFrame | None = None) -> str:
-    """Table: the three construction arms, one column per metric, with 95% CIs.
-
-    All three arms run the *same* learned placement policy, so the only thing that
-    changes across rows is the substrate: the un-reconstructed graph, that graph
-    re-randomised at fixed degree sequence, and the reconstructed graph. That isolates
-    the two steps of the construction (rewiring, then the change of degree sequence)
-    without invoking the single-hub parameter, which the current design point no
-    longer exposes and which therefore has no arm here.
-
-    The numbers are read from the thirty-graph family store rather than from the
-    nine-graph matrix, because the deployed row of Table~\\ref{tab:aggregate_all} is
-    the same store: the matrix rows are 0.004 apart on $H_C$, and an ablation table
-    that does not add up to the deployed row it is supposed to decompose is worse
-    than no table.
-
-    Each cell is the mean over the thirty topologies followed by the two-sided 95%
-    confidence interval of that mean, built as a Student-t interval on the
-    per-topology means with 29 degrees of freedom---the same construction as
-    Table~\\ref{tab:statistical_tests}.
-    """
+    """Table: the three construction arms, one column per metric, with 95% CIs."""
     from family_ctrl_report import load as load_family
 
     columns = ("auc_gcc", "auc_csa", "auc_hc", "r_res")
@@ -297,7 +229,7 @@ def table_ablation(frame: pd.DataFrame | None = None) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="从结果档生成论文 LaTeX 表")
+    parser = argparse.ArgumentParser(description="generate the LaTeX tables from the result files")
     parser.add_argument("--out", required=True)
     args = parser.parse_args(argv)
     out_dir = Path(args.out)
@@ -319,21 +251,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-
-
 def table_statistics() -> str:
-    """Table: paired comparison against BiT-HyRL, one observation per topology.
-
-    Read from ``results/family/family_paired.csv``, the tidy table written next to
-    ``family_ctrl.csv`` by ``scripts/family_ctrl_report.py``.  Both files come from
-    the same per-graph records, so the test can no longer be computed on a different
-    sample from the table it accompanies.
-
-    The unit of analysis is the topology (n = 30).  Pooling the seed-level records
-    would multiply the sample size by 40 without adding independent information, so the
-    exact Wilcoxon is run on the per-topology paired differences and Holm is applied
-    within each row across the four metrics.
-    """
+    """Table: paired comparison against BiT-HyRL, one observation per topology."""
     frame = pd.read_csv(RESULTS / "family" / "family_paired.csv").set_index("strategy")
     rows = ("UNITY", "QDLM", "FRED-ABL", "Eff-R-Net", "ONION", "ROMEN",
             "MADQN", "MWCL", "KMedian", "Random-pl.")
@@ -412,12 +331,7 @@ def table_sensitivity_ratio() -> str:
 
 
 def table_sensitivity_weights() -> str:
-    """Does the ranking depend on how the evaluation aggregate weights the three terms?
-
-    Recomputed from ``results/family/family_ctrl.csv`` — the three component areas of
-    every strategy — so the reweighted rows are the same records as the equal-weight row
-    rather than a separate sweep that could carry a different bimodal arm.
-    """
+    """Does the ranking depend on how the evaluation aggregate weights the three terms?"""
     weights = (
         ("Equal $(1/3,1/3,1/3)$", (1 / 3, 1 / 3, 1 / 3)),
         ("Structural $(.5,.3,.2)$", (0.5, 0.3, 0.2)),
@@ -441,7 +355,6 @@ def table_sensitivity_weights() -> str:
         lines.append(f"{name} & {bit:.4f} & {unity:.4f} & {bit - unity:+.4f} \\\\")
     body = "\n".join(lines)
 
-    # the caption claims the ranking barely moves; measure it instead of asserting it
     rho = 1.0
     keys = [name for name, _ in weights]
     for i, first in enumerate(keys):
@@ -462,7 +375,6 @@ def table_sensitivity_weights() -> str:
             "\\textbf{UNITY} & \\textbf{Margin} \\\\\n\\midrule\n")
     tail = "\n\\bottomrule\n\\end{tabular}\n\\end{table}\n"
     return head + body + tail
-
 
 
 def table_advanced_attacks() -> str:
@@ -517,20 +429,12 @@ def table_advanced_attacks() -> str:
              "& " + " & ".join(["\\textbf{GCC} & \\textbf{$CSA$} & \\textbf{$H_C$}"] * 4) + " \\\\\n"
              "\\midrule\n")
     tail = "\n\\bottomrule\n\\end{tabular*}\n\\end{table*}\n"
-    # rejoin the caption/label as separate lines so LaTeX is happy
     head = head.replace("}\n\\label", "}\n\\label")
     return head + body + tail
 
 
 def table_aggregate_30() -> str:
-    """Table: every strategy aggregated over the full thirty-topology suite.
-
-    Read straight from ``results/family/family_ctrl.csv`` — the same tidy table that
-    supplies the family comparison — so the two tables cannot disagree.  The earlier
-    version of this function rebuilt the aggregate from the seed-level archive, which
-    carried the pre-BiT-A bimodal rows and therefore reported 0.4058 where the family
-    table reported 0.4040.
-    """
+    """Table: every strategy aggregated over the full thirty-topology suite."""
     frame = pd.read_csv(RESULTS / "family" / "family_ctrl.csv")
     frame = frame.set_index("strategy")
     order = ("BiT-HyRL", "BiT-c1.0", "BiT-degOnly", "BiT-norecon",
@@ -569,15 +473,8 @@ def table_aggregate_30() -> str:
     return head + body + tail
 
 
-
 def table_runtime() -> str:
-    """Table: deployment-stage cost, measured rather than inherited.
-
-    The previous table in the manuscript came from an earlier pipeline and contained a
-    scale (N = 800) that is not in the registry, so it could not be reproduced.  These
-    numbers come from ``scripts/runtime_benchmark.py``: substrate construction plus
-    greedy controller selection, cascade evaluation excluded.
-    """
+    """Table: deployment-stage cost, measured rather than inherited."""
     path = BASELINES / "runtime_benchmark.csv"
     if not path.exists():
         return "% runtime_benchmark.csv missing"
@@ -596,8 +493,6 @@ def table_runtime() -> str:
             if value is None or pd.isna(value):
                 cells.append("--")
             elif scale == "BA-1000" and value >= 100:
-                # the three large-n cells were measured once each and are reported to a
-                # tenth of a second; two decimals would claim a precision not measured
                 cells.append(f"{value:.1f}")
             else:
                 cells.append(f"{value:.2f}")

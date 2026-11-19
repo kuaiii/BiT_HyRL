@@ -22,8 +22,6 @@ def _coreHD(network, **kwargs):
     import numpy as np
     from graph_tool.all import remove_parallel_edges, remove_self_loops
 
-    # CoreHD does not support parallel edges or self-loops.
-    # Remove them.
     remove_parallel_edges(network)
     remove_self_loops(network)
 
@@ -48,8 +46,6 @@ def _coreHD(network, **kwargs):
                     f"{static_id[edge.source()] + 1} {static_id[edge.target()] + 1}\n"
                 )
 
-            # for edge in network.get_edges():
-            #     tmp.write("{} {}\n".format(int(edge[0]) + 1, int(edge[1]) + 1))
 
         cmds = [
             # TODO move build to setup.py?
@@ -63,9 +59,6 @@ def _coreHD(network, **kwargs):
             f'--FVSfile "{feedback_path}" '
             f'--Timefile "{time_path}" '
             f'--Csize {kwargs["stop_condition"]} '
-            # f'--seed {kwargs["seed"]} '
-            #     int rdseed = 93276792; //you can set this seed to another value
-            #     int prerun = 14000000; //you can set it to another value
         ]
 
         for cmd in cmds:
@@ -77,8 +70,6 @@ def _coreHD(network, **kwargs):
                         cd_cmd + cmd,
                         shell=True,
                         text=True,
-                        # close_fds=True,
-                        # stderr=STDOUT,
                     )
                 )
             except Exception as e:

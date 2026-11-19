@@ -1,5 +1,5 @@
 {
-  "_comment": "评测图清单与金标准 (N, M)。扩至 30 图（每族 6 张）：BA/ER/WS 合成（N∈{100..1000}）、6 家真实 ISP 路由器级（Cogentco/Colt/GtsCe/UsCarrier/DialtelecomCz/VtlWavenet2011）、6 张 SNAP as-733 BGP-AS 快照。n/m/duplicates_removed/raw_edge_records 为硬约束，sha256 为归一化后排序边表哈希。",
+  "_comment": "Evaluation graphs with their pinned (N, M). Thirty graphs, six per family: synthetic BA/ER/WS (N in 100..1000), six router-level ISP topologies (Cogentco, Colt, GtsCe, UsCarrier, DialtelecomCz, VtlWavenet2011) and six SNAP as-733 BGP-AS snapshots. n, m, duplicates_removed and raw_edge_records are hard constraints; sha256 is the hash of the normalised, sorted edge list.",
   "schema_version": "bit_hyrl/fingerprint/1.0",
   "graphs": [
     {

@@ -24,8 +24,6 @@ def _explosive_immunization(
     import numpy as np
     from graph_tool.all import remove_parallel_edges, remove_self_loops
 
-    # Not sure if EI supports parallel edges or self-loops.
-    # Remove them as this fixes a bug and as they do not alter the dismantling set
     remove_parallel_edges(network)
     remove_self_loops(network)
 
@@ -74,15 +72,6 @@ def _explosive_immunization(
             except Exception as e:
                 exit("ERROR! {}".format(e))
 
-        # # Safety check
-        # with open(threshold_condition_fd, 'r+') as tmp:
-        #     for line in tmp.readlines():
-        #         node, vaccinated = line.strip().split()
-        #
-        #         vaccinated = int(vaccinated)
-        #
-        #         if vaccinated:
-        #             vaccinated_nodes.append(int(node))
 
         with open(output_fd, "r+") as tmp:
             for line in tmp.readlines():
@@ -113,9 +102,6 @@ def _explosive_immunization(
 
 
 method_info = {
-    # "name": "Explosive Immunization",
-    # "short_name": "EI",
-    # "description": "Explosive Immunization",
     "source": "https://github.com/pclus/explosive-immunization/",
 }
 

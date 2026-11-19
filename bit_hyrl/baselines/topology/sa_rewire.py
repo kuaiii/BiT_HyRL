@@ -1,15 +1,7 @@
-"""SA-R topology baseline -- simulated annealing on robustness with 2-swaps.
+"""SA-R baseline: simulated annealing on robustness with degree-preserving 2-swaps.
 
-Second member of the classical search family (after :mod:`r_greedy`).  Where greedy
-only accepts strict improvements and therefore freezes at the first local optimum, SA
-accepts a worsening swap with probability ``exp(delta / T)``, so it can leave a basin.
-Both move through the identical feasible set (degree-preserving, simple, connected) and
-score with the identical cheap ``R``, so the pair separates "greedy" from "greedy +
-escape" at a fixed evaluation budget.
-
-Temperature is geometric from ``t0`` to ``t_end`` (both expressed as **fractions of
-the initial R**, since ``R`` is O(0.1) on sparse graphs and an absolute temperature
-would be meaningless across graphs of different size).
+Shares the move set and the scoring function with :mod:`r_greedy`; only the
+acceptance rule differs.
 """
 
 from __future__ import annotations
