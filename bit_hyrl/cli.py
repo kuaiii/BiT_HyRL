@@ -1314,7 +1314,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_verify.set_defaults(func=cmd_verify)
 
     p_eval = subparsers.add_parser(
-        "eval", help="evaluate the original and reconstructed topologies"
+        "eval", aliases=["evaluate"], help="evaluate the original and reconstructed topologies"
     )
     p_eval.add_argument("--dataset", default="all", help="dataset name or all")
     p_eval.add_argument(

@@ -32,6 +32,9 @@ the seven figures and fourteen tables, and that the training defaults in `bit_hy
 and `configs/default.json` still match the run that produced the shipped checkpoint.
 Exit code 0 means every check passed.
 
+`VERSION.md` records the size and SHA-256 of the frozen policy and of the GDM weights, so a
+downloaded snapshot can be tied to the exact artifacts behind the tables.
+
 ## Layout
 
 ```text
@@ -51,6 +54,7 @@ scripts/                   experiment drivers, table and figure builders, integr
 results/                   archived results; see results/README.md
 figures/                   the seven manuscript figures
 paper_tables/              LaTeX fragments of the fourteen numerical tables
+VERSION.md                 checksums of the frozen policy and the GDM weights
 ```
 
 ## Method
@@ -199,8 +203,8 @@ python -m bit_hyrl --help
 ```
 
 with the sub-commands `fingerprint`, `construct`, `probe`, `sweep-c`, `feasibility`,
-`verify`, `eval`, `train`, `transfer`, `ablate`, `matrix`, `method-matrix`,
-`method-stats`, `stats` and `figures`.
+`verify`, `eval` (also accepted as `evaluate`), `train`, `transfer`, `ablate`, `matrix`,
+`method-matrix`, `method-stats`, `stats` and `figures`.
 
 Seeds are derived from `(dataset, attack, seed)` in `bit_hyrl/rng.py`; no global seed is
 set, so shards can run in any order and on any number of workers.
