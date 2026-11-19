@@ -1,0 +1,38 @@
+BiT-HyRL - bimodal topology and hybrid reinforcement learning for resilient
+distributed control systems against cascading failures
+
+Copyright (C) 2026 Yizhong Hu, Jianfeng Guan, Su Yao, Junxiang Jia, Mu Wang,
+Changqiao Xu
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program.  If not, see <https://www.gnu.org/licenses/>.
+
+The full text of the license is in the file LICENSE (GPL-3.0, 29 June 2007).
+
+--------------------------------------------------------------------------
+
+Third-party material
+
+  network_dismantling/
+      A vendored copy of the network-dismantling library released with
+      "Robustness and resilience of complex networks" (Artime et al.),
+      distributed under GPL-3.0.  Used unchanged; the GDM weights file is
+      included.  Redistributed here under the same terms as the rest of
+      this package.
+
+  dataset/testdata/*.txt
+      Raw BGP-AS snapshots from the SNAP as-733 collection, used as inputs
+      for six of the evaluation graphs.  See the SNAP terms of use.
+
+  dataset/testdata/*.gml, figures/
+      Generated for this study (synthetic substrates) or derived from the
+      sources above; redistributed under the same license as the package.

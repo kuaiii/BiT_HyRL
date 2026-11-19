@@ -260,7 +260,8 @@ This package is free software: you can redistribute it and/or modify it under th
 the GNU General Public License as published by the Free Software Foundation, either version 3
 of the License, or (at your option) any later version. It is distributed in the hope that it
 will be useful, but **without any warranty**; without even the implied warranty of
-merchantability or fitness for a particular purpose. The full text is in [`LICENSE`](LICENSE).
+merchantability or fitness for a particular purpose. The full text is in [`LICENSE`](LICENSE);
+the copyright statement and the third-party attribution are in [`NOTICE`](NOTICE).
 
 `network_dismantling/` is a vendored third-party library (see §9) that is itself released
 under GPL-3.0, so it is redistributed here under the same terms as the rest of the package.
