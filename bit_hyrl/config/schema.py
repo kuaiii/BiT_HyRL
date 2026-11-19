@@ -351,17 +351,17 @@ class TrainConfig(_ConfigBase):
     """PPO training hyper-parameters."""
 
     total_iterations: int = 200
-    episodes_per_iter: int = 8
-    lr: float = 3e-4
+    episodes_per_iter: int = 6
+    lr: float = 1e-4
     clip: float = 0.2
     gae_lambda: float = 0.95
-    gamma: float = 1.0
+    gamma: float = 0.99
     entropy_coef: float = 0.01
     epochs: int = 4
     hidden_dim: int = 64
     gcn_layers: int = 2
     reward_weights: dict[str, float] = field(
-        default_factory=lambda: {"structure": 1.0, "csa": 0.5, "h_load": 0.5, "distance": 0.1}
+        default_factory=lambda: {"structure": 0.6, "csa": 0.2, "h_load": 0.2, "distance": 0.0}
     )
     attack_prefix_fraction: float = 0.3
 

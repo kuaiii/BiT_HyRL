@@ -259,7 +259,7 @@ def train(
     heads: int = 2,
     device: str = "cpu",
     val_graphs: Sequence[GraphLike] | None = None,
-    patience: int = 20,
+    patience: int = 0,
     eval_sample: int = 20,
     value_coef: float = 0.5,
     grad_clip: float = 0.5,

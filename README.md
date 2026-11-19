@@ -27,8 +27,10 @@ python scripts/check_package.py
 
 This recomputes the headline numbers from the archived CSV files using the standard
 library only: the thirty graphs against their pinned fingerprints, `R_res = 0.4040`, the
-paired difference against UNITY, the row counts of the campaign grids, and the presence of
-the seven figures and fourteen tables. Exit code 0 means every check passed.
+paired difference against UNITY, the row counts of the campaign grids, the presence of
+the seven figures and fourteen tables, and that the training defaults in `bit_hyrl/cli.py`
+and `configs/default.json` still match the run that produced the shipped checkpoint.
+Exit code 0 means every check passed.
 
 ## Layout
 
@@ -42,7 +44,8 @@ bit_hyrl/                  method package
   analysis/                  aggregation, paired statistics, ablation and matrix drivers
   io/, config/, rng.py       graph loading and fingerprints, config schema, seed derivation
 network_dismantling/       third-party dismantling library, used by the GDM attack
-configs/                   graphs.json, splits.json, method.yaml, attacks.yaml, datasets.yaml
+configs/                   graphs.json, splits.json, method.yaml, attacks.yaml, datasets.yaml,
+                           default.json (reference copy of the training run, not an input)
 dataset/testdata/          the thirty evaluation topologies (GML)
 scripts/                   experiment drivers, table and figure builders, integrity check
 results/                   archived results; see results/README.md
@@ -70,6 +73,45 @@ policy does not observe how the substrate was built.
 *Evaluation.* A controller-aware cascade runs on the reconstructed graph under six removal
 orders. `R_res` is the weighted mean of the normalised areas under the `GCC`, `CSA` and
 `H_C` curves, averaged over the twenty seeds of each `(topology, attack)` cell.
+
+## Training the policy
+
+The shipped checkpoint is the one and only policy behind every reported number. It was
+produced by this command, and by no other:
+
+```bash
+python -m bit_hyrl train \
+    --split configs/splits.json \
+    --iterations 200 --episodes 6 --seed 0 --patience 0 \
+    --out results/checkpoints/ppo_final_s0.pt
+```
+
+| Setting | Value | Where it is fixed |
+|---|---|---|
+| PPO updates | 200 | `--iterations` |
+| Rollout episodes per update | 6 | `--episodes` (default 6) |
+| Total episodes / substrates | 1,200 / 1,200 | 200 x 6, drawn without replacement from the 2,000-graph training split |
+| Early stopping | disabled, patience 0 | `--patience` (default 0) |
+| Learning rate | 1e-4 | `--lr` (default 1e-4) |
+| Discount factor | 0.99 | `--gamma` (default 0.99) |
+| Reward weights `(w_G, w_S, w_H)` | 0.6 / 0.2 / 0.2 | `bit_hyrl.cli._PAPER_REWARD_WEIGHTS` |
+| Clip ratio, GAE, entropy, epochs | 0.2, 0.95, 0.01, 4 | `TrainConfig` |
+| Minibatch, value coefficient, grad clip | 32, 0.5, 0.5 | `cmd_train` |
+| Reward attack window | first 30 % of the removal sequence | `TrainConfig.attack_prefix_fraction` |
+
+The run took 3,583 s and ended at update 200 because that was the budget, so the saved
+state is the final iterate; validation was logged but never used to select a checkpoint.
+
+`configs/default.json` is a **reference copy, not an input**: `train` never reads it, since
+`cmd_train` builds `TrainConfig` from the flags above. Its `train` block mirrors this table,
+and `scripts/check_package.py` fails if the file and the CLI defaults drift apart again.
+The authoritative machine-readable record is the `cfg` block inside the checkpoint itself:
+
+```python
+import torch
+ckpt = torch.load("results/checkpoints/ppo_final_s0.pt", map_location="cpu", weights_only=False)
+ckpt["cfg"], ckpt["patience"], ckpt["train_seconds"]
+```
 
 ## Tables
 

@@ -1,5 +1,7 @@
 {
   "_comment": "Global default configuration. JSON rather than YAML because the runtime does not require pyyaml.",
+  "_status": "Reference copy, not an input. `python -m bit_hyrl train` never reads this file: cmd_train builds TrainConfig from the command-line flags, so the flags are the run configuration. The values below mirror the run behind every reported number and are checked against the CLI defaults by scripts/check_package.py, but the authoritative record of that run is the `cfg` block of the shipped checkpoint (results/checkpoints/ppo_final_s0.pt).",
+  "_source": "results/checkpoints/ppo_final_s0.pt: 200 updates x 6 episodes, 3583 s, seed 0, early stopping disabled (patience 0), reward weights 0.6/0.2/0.2/0.0.",
   "cascade": {
     "max_iter": 50,
     "mode": "structural",
@@ -38,17 +40,17 @@
     "clip": 0.2,
     "entropy_coef": 0.01,
     "epochs": 4,
-    "episodes_per_iter": 8,
-    "gamma": 1.0,
+    "episodes_per_iter": 6,
+    "gamma": 0.99,
     "gcn_layers": 2,
     "gae_lambda": 0.95,
     "hidden_dim": 64,
-    "lr": 0.0003,
+    "lr": 0.0001,
     "reward_weights": {
-      "csa": 0.5,
-      "distance": 0.1,
-      "h_load": 0.5,
-      "structure": 1.0
+      "csa": 0.2,
+      "distance": 0.0,
+      "h_load": 0.2,
+      "structure": 0.6
     },
     "total_iterations": 200
   },

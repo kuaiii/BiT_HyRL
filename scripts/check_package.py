@@ -10,6 +10,7 @@ Usage::
 
 from __future__ import annotations
 
+import ast
 import csv
 import json
 from pathlib import Path
@@ -40,6 +41,29 @@ FIGURE_FILES = (
     "construction_mechanism.pdf",
     "applicability_domain.pdf",
 )
+
+#: Training configuration of the run behind Table 5 and the shipped checkpoint, transcribed
+#: from the ``cfg`` block of results/checkpoints/ppo_final_s0.pt (2026-11-18):
+#: 200 updates x 6 episodes, 3583 s, patience 0, reward weights 0.6/0.2/0.2/0.0.
+PAPER_RUN_CLI = {
+    "--iterations": 200,
+    "--episodes": 6,
+    "--lr": 1e-4,
+    "--gamma": 0.99,
+    "--patience": 0,
+}
+PAPER_RUN_CONFIG = {
+    "total_iterations": 200,
+    "episodes_per_iter": 6,
+    "lr": 1e-4,
+    "gamma": 0.99,
+    "clip": 0.2,
+    "gae_lambda": 0.95,
+    "entropy_coef": 0.01,
+    "epochs": 4,
+    "attack_prefix_fraction": 0.3,
+    "reward_weights": {"structure": 0.6, "csa": 0.2, "h_load": 0.2, "distance": 0.0},
+}
 
 _results: list[tuple[str, bool, str]] = []
 
@@ -153,6 +177,53 @@ def _checkpoint() -> tuple[bool, str]:
     path = RESULTS / "checkpoints" / "ppo_final_s0.pt"
     size = path.stat().st_size if path.exists() else 0
     return size > 50_000, f"{path.name}, {size} bytes"
+
+
+def _cli_train_defaults() -> dict[str, object]:
+    """Read the ``train`` sub-command defaults out of cli.py, without importing it."""
+    tree = ast.parse((ROOT / "bit_hyrl" / "cli.py").read_text("utf-8"))
+    found: dict[str, object] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr != "add_argument":
+            continue
+        flag = node.args[0].value if node.args and isinstance(node.args[0], ast.Constant) else None
+        if flag not in PAPER_RUN_CLI:
+            continue
+        for keyword in node.keywords:
+            if keyword.arg == "default" and isinstance(keyword.value, ast.Constant):
+                found[flag] = keyword.value.value
+    return found
+
+
+def _cli_reward_weights() -> dict[str, float] | None:
+    """Read ``_PAPER_REWARD_WEIGHTS`` out of cli.py at the syntax level."""
+    tree = ast.parse((ROOT / "bit_hyrl" / "cli.py").read_text("utf-8"))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if any(isinstance(t, ast.Name) and t.id == "_PAPER_REWARD_WEIGHTS" for t in node.targets):
+            try:
+                return ast.literal_eval(node.value)
+            except ValueError:
+                return None
+    return None
+
+
+@check("Table 5: training defaults match the run behind the checkpoint")
+def _train_config() -> tuple[bool, str]:
+    train = json.loads((ROOT / "configs" / "default.json").read_text("utf-8"))["train"]
+    cli = _cli_train_defaults()
+    weights = _cli_reward_weights()
+
+    cli_ok = cli == PAPER_RUN_CLI
+    config_ok = all(train.get(key) == value for key, value in PAPER_RUN_CONFIG.items())
+    weights_ok = weights == PAPER_RUN_CONFIG["reward_weights"]
+    detail = (f"--episodes {cli.get('--episodes')}, --patience {cli.get('--patience')}, "
+              f"lr {cli.get('--lr')}, gamma {cli.get('--gamma')}; "
+              f"default.json episodes_per_iter {train.get('episodes_per_iter')}")
+    return cli_ok and config_ok and weights_ok, detail
 
 
 @check("seven manuscript figures on disk")

@@ -484,7 +484,7 @@ def cmd_eval(args: argparse.Namespace) -> int:
 
 
 def cmd_train(args: argparse.Namespace) -> int:
-    """Train a PPO controller-placement policy (paper Table-4 budget)."""
+    """Train a PPO controller-placement policy (manuscript Table 5 hyper-parameters)."""
     import csv
     import time
 
@@ -1352,10 +1352,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_train.add_argument("--split", default=None,
                          help="train on the train split and early-stop on val (e.g. configs/splits.json)")
     p_train.add_argument("--iterations", type=int, default=200, help="outer iterations")
-    p_train.add_argument("--episodes", type=int, default=8, help="rollout episodes per iteration")
+    p_train.add_argument("--episodes", type=int, default=6,
+                         help="rollout episodes per iteration (manuscript Table 5: 6)")
     p_train.add_argument("--lr", type=float, default=1e-4, help="Adam learning rate")
     p_train.add_argument("--gamma", type=float, default=0.99, help="discount factor")
-    p_train.add_argument("--patience", type=int, default=20, help="early-stop patience on val (0 disables)")
+    p_train.add_argument("--patience", type=int, default=0,
+                         help="early-stop patience on val, 0 disables (manuscript Section 5.1: 0)")
     p_train.add_argument("--eval-sample", type=int, default=20, help="size of the val evaluation subset")
     p_train.add_argument("--seed", type=int, default=0, help="root seed")
     p_train.add_argument("--out", default=None, help="checkpoint output path (default results/checkpoints/)")
